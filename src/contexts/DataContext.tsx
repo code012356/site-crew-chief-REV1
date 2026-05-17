@@ -160,7 +160,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const fetchWorkCodes = useCallback(async () => {
     const data = await fetchAllRows('work_codes', { column: 'code' });
     if (data) {
-      setWorkCodes(data.map((r: any) => ({ id: r.id, code: r.code, name: r.name, category: r.category })));
+      setWorkCodes(data.map((r: any) => ({ id: r.id, code: r.code, name: r.name, category: r.category, area: r.area || undefined })));
     }
   }, []);
 
@@ -373,7 +373,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Work code CRUD ──
   const addWorkCode = async (wc: Omit<WorkCode, 'id'>) => {
-    const { error } = await supabase.from('work_codes').insert({ code: wc.code, name: wc.name, category: wc.category });
+    const { error } = await supabase.from('work_codes').insert({ code: wc.code, name: wc.name, category: wc.category, area: wc.area || null } as any);
     assertSupabaseOk(error, 'Add work code');
     await fetchWorkCodes();
   };
@@ -382,6 +382,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.code !== undefined) db.code = updates.code;
     if (updates.name !== undefined) db.name = updates.name;
     if (updates.category !== undefined) db.category = updates.category;
+    if (updates.area !== undefined) db.area = updates.area || null;
     const { error } = await supabase.from('work_codes').update(db).eq('id', id);
     assertSupabaseOk(error, 'Update work code');
     await fetchWorkCodes();

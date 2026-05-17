@@ -71,6 +71,7 @@ export interface WorkCode {
   code: string;
   name: string;
   category: string;
+  area?: string;
 }
 
 export interface EquipmentUsageEntry {

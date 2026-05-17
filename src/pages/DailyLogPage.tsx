@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { useAppContext } from '@/contexts/AppContext';
 import { useDataContext } from '@/contexts/DataContext';
-import { DailyLog, DailyLogEntry, EquipmentUsageEntry, WORK_AREAS, LogRevision } from '@/lib/types';
+import { DailyLog, DailyLogEntry, EquipmentUsageEntry, LogRevision } from '@/lib/types';
 import { Plus, Trash2, Send, FileText, Edit2, History, ChevronDown, ChevronUp, ChevronRight, Download, RotateCcw, Archive, AlertTriangle, Undo2, CalendarIcon, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -156,6 +156,7 @@ export default function DailyLogPage() {
         const wc = workCodes.find(c => c.id === bulkEdit.workCodeId);
         next.workCodeId = bulkEdit.workCodeId;
         next.workCodeName = wc ? `[${wc.code}] ${wc.name}` : '';
+        if (wc?.area) next.area = wc.area;
       }
       return next;
     }));
@@ -174,6 +175,7 @@ export default function DailyLogPage() {
         const wc = workCodes.find(c => c.id === bulkEdit.workCodeId);
         next.workCodeId = bulkEdit.workCodeId;
         next.workCodeName = wc ? `[${wc.code}] ${wc.name}` : '';
+        if (wc?.area) next.area = wc.area;
       }
       return next;
     }));
@@ -216,7 +218,7 @@ export default function DailyLogPage() {
       }
       if (field === 'workCodeId') {
         const wc = workCodes.find(c => c.id === value);
-        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
+        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '', area: wc?.area || e.area };
       }
       if (field === 'startTime') {
         const newStart = value as string;
@@ -239,7 +241,7 @@ export default function DailyLogPage() {
       }
       if (field === 'workCodeId') {
         const wc = workCodes.find(c => c.id === value);
-        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
+        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '', area: wc?.area || e.area };
       }
       if (field === 'startTime') {
         const newStart = value as string;
@@ -351,6 +353,7 @@ export default function DailyLogPage() {
     acc[wc.category].push(wc);
     return acc;
   }, {} as Record<string, typeof workCodes>);
+  const workAreas = Array.from(new Set(workCodes.map(wc => wc.area).filter(Boolean) as string[])).sort();
 
   const historyLog = historyLogId ? logs.find(l => l.id === historyLogId) : null;
 
@@ -645,7 +648,7 @@ export default function DailyLogPage() {
                       {i === 0 && <Label className="text-xs text-muted-foreground">施工区域 Area</Label>}
                       <Select value={entry.area} onValueChange={v => updateEntry(i, 'area', v)}>
                         <SelectTrigger className="h-9"><SelectValue placeholder="选择区域 Select area" /></SelectTrigger>
-                        <SelectContent>{WORK_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                        <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <Button variant="ghost" size="icon" className="h-9" onClick={() => setEntries(prev => prev.filter((_, idx) => idx !== i))}>
@@ -732,7 +735,7 @@ export default function DailyLogPage() {
                       {i === 0 && <Label className="text-xs text-muted-foreground">施工区域 Area</Label>}
                       <Select value={entry.area} onValueChange={v => updateEqEntry(i, 'area', v)}>
                         <SelectTrigger className="h-9"><SelectValue placeholder="选择区域 Select area" /></SelectTrigger>
-                        <SelectContent>{WORK_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                        <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <Button variant="ghost" size="icon" className="h-9" onClick={() => setEqEntries(prev => prev.filter((_, idx) => idx !== i))}>
@@ -1036,7 +1039,7 @@ export default function DailyLogPage() {
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="不修改 Keep" /></SelectTrigger>
-                <SelectContent>{WORK_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">施工代码 Work Code</Label>
@@ -1073,7 +1076,7 @@ export default function DailyLogPage() {
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="不修改 Keep" /></SelectTrigger>
-                <SelectContent>{WORK_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">施工代码 Work Code</Label>

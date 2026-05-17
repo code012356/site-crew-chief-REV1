@@ -11,13 +11,14 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { actionLabels, fieldLabels, filterLabels, messages, pageTitles } from '@/lib/i18n';
 
-const CATEGORIES = ['土建工程', '安装工程', '装修工程', '其他'];
-const CATEGORY_EN: Record<string, string> = {
-  土建工程: 'Civil',
-  安装工程: 'Installation',
-  装修工程: 'Decoration',
-  其他: 'Other',
+type WorkCodeForm = {
+  code: string;
+  name: string;
+  category: string;
+  area: string;
 };
+
+const emptyForm: WorkCodeForm = { code: '', name: '', category: '', area: '' };
 
 export default function WorkCodesPage() {
   const { workCodes, addWorkCode, updateWorkCode, deleteWorkCode } = useDataContext();
@@ -25,41 +26,51 @@ export default function WorkCodesPage() {
   const [filterCat, setFilterCat] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WorkCode | null>(null);
-  const [form, setForm] = useState({ code: '', name: '', category: '土建工程' });
+  const [form, setForm] = useState<WorkCodeForm>(emptyForm);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const categories = Array.from(new Set(workCodes.map(wc => wc.category).filter(Boolean))).sort();
+
   const filtered = workCodes.filter(wc => {
-    if (search && !wc.code.includes(search) && !wc.name.includes(search)) return false;
+    const q = search.trim().toLowerCase();
+    const hay = `${wc.code} ${wc.name} ${wc.category} ${wc.area || ''}`.toLowerCase();
+    if (q && !hay.includes(q)) return false;
     if (filterCat !== 'all' && wc.category !== filterCat) return false;
     return true;
   });
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ code: '', name: '', category: '土建工程' });
+    setForm({ ...emptyForm, category: categories[0] || '' });
     setDialogOpen(true);
   };
 
   const openEdit = (wc: WorkCode) => {
     setEditing(wc);
-    setForm({ code: wc.code, name: wc.name, category: wc.category });
+    setForm({ code: wc.code, name: wc.name, category: wc.category, area: wc.area || '' });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.code.trim() || !form.name.trim()) {
+    const payload = {
+      code: form.code.trim(),
+      name: form.name.trim(),
+      category: form.category.trim(),
+      area: form.area.trim() || undefined,
+    };
+    if (!payload.code || !payload.name || !payload.category) {
       toast.error(messages.fillComplete);
       return;
     }
     if (editing) {
-      await updateWorkCode(editing.id, form);
+      await updateWorkCode(editing.id, payload);
       toast.success(messages.saved);
     } else {
-      if (workCodes.some(wc => wc.code === form.code.trim())) {
-        toast.error('代码已存在 Code already exists');
+      if (workCodes.some(wc => wc.code === payload.code)) {
+        toast.error('Code already exists');
         return;
       }
-      await addWorkCode(form);
+      await addWorkCode(payload);
       toast.success(messages.saved);
     }
     setDialogOpen(false);
@@ -77,10 +88,11 @@ export default function WorkCodesPage() {
       const imported = await importWorkCodes(file);
       for (const wc of imported) {
         const existing = workCodes.find(w => w.code === wc.code);
+        const payload = { name: wc.name, category: wc.category, area: wc.area };
         if (existing) {
-          await updateWorkCode(existing.id, { name: wc.name, category: wc.category });
+          await updateWorkCode(existing.id, payload);
         } else {
-          await addWorkCode({ code: wc.code, name: wc.name, category: wc.category });
+          await addWorkCode({ code: wc.code, ...payload });
         }
       }
       toast.success(`${messages.imported} (${imported.length})`);
@@ -111,10 +123,10 @@ export default function WorkCodesPage() {
           <Input placeholder={filterLabels.searchCode} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={filterCat} onValueChange={setFilterCat}>
-          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{filterLabels.allCategories}</SelectItem>
-            {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c} {CATEGORY_EN[c]}</SelectItem>)}
+            {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -126,6 +138,7 @@ export default function WorkCodesPage() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.code}</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.name}</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.category}</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">施工区域 Area</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">{fieldLabels.actions}</th>
             </tr>
           </thead>
@@ -134,7 +147,8 @@ export default function WorkCodesPage() {
               <tr key={wc.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs font-semibold">{wc.code}</td>
                 <td className="px-4 py-3 font-medium">{wc.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{wc.category} {CATEGORY_EN[wc.category] || ''}</td>
+                <td className="px-4 py-3 text-muted-foreground">{wc.category}</td>
+                <td className="px-4 py-3 text-muted-foreground">{wc.area || '-'}</td>
                 <td className="px-4 py-3 text-right">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(wc)}><Edit2 size={15} /></Button>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(wc.id)}><Trash2 size={15} className="text-destructive" /></Button>
@@ -148,19 +162,18 @@ export default function WorkCodesPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? '编辑施工代码 Edit Work Code' : '添加施工代码 Add Work Code'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? 'Edit Work Code' : 'Add Work Code'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div><Label>{fieldLabels.code}</Label><Input placeholder="e.g. TJ-006" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.name}</Label><Input placeholder="e.g. 地基处理 Foundation Work" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>{fieldLabels.name}</Label><Input placeholder="e.g. Foundation Work" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div>
               <Label>{fieldLabels.category}</Label>
-              <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c} {CATEGORY_EN[c]}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Input list="work-code-categories" placeholder="e.g. Civil / 土建工程" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
+              <datalist id="work-code-categories">
+                {categories.map(c => <option key={c} value={c} />)}
+              </datalist>
             </div>
+            <div><Label>施工区域 Area</Label><Input placeholder="e.g. A区 基础施工 / Zone A Foundation" value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{actionLabels.cancel}</Button>

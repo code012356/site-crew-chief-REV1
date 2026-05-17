@@ -328,6 +328,7 @@ export type Database = {
       }
       work_codes: {
         Row: {
+          area: string | null
           category: string
           code: string
           created_at: string
@@ -335,6 +336,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          area?: string | null
           category?: string
           code: string
           created_at?: string
@@ -342,6 +344,7 @@ export type Database = {
           name: string
         }
         Update: {
+          area?: string | null
           category?: string
           code?: string
           created_at?: string

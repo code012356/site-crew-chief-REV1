@@ -209,9 +209,10 @@ export function exportWorkCodes(data: WorkCode[]) {
     '代码 Code': wc.code,
     '名称 Name': wc.name,
     '分类 Category': wc.category,
+    'Area': wc.area || '',
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 24 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '施工代码 Work Codes');
   XLSX.writeFile(wb, `施工代码_WorkCodes_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -229,6 +230,7 @@ export function importWorkCodes(file: File): Promise<WorkCode[]> {
           id: `imp_wc_${Date.now()}_${index}`,
           code: getByHeader(row, ['Code', '代码']).trim(),
           name: getByHeader(row, ['Name', '名称']).trim(),
+          area: getByHeader(row, ['Area', '施工区域', '区域']) || undefined,
           category: getByHeader(row, ['Category', '分类']) || '其他',
         })).filter(code => code.code && code.name);
         resolve(codes);
