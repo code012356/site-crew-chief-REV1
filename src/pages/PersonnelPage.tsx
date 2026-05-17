@@ -79,6 +79,8 @@ export default function PersonnelPage() {
     setUndoStack(prev => [...prev.slice(-19), action]);
   }, []);
 
+  const getErrorMessage = (err: unknown) => err instanceof Error ? err.message : 'Unknown error';
+
   // Import preview state
   const [importPreviewOpen, setImportPreviewOpen] = useState(false);
   const [importCandidates, setImportCandidates] = useState<ImportCandidate[]>([]);
@@ -311,35 +313,43 @@ export default function PersonnelPage() {
       actualWork: form.actualWork || undefined,
       seqNo: form.seqNo ? parseInt(form.seqNo) || undefined : undefined,
     };
-    if (editing) {
-      pushUndo({ type: 'update', ids: [editing.id], previousData: [{ ...editing }], description: `编辑 ${editing.name}` });
-      await updatePersonnel(editing.id, payload);
-      if (form.status === 'resigned' && editing.status !== 'resigned') {
-        if (editing.role === 'worker') {
-          const a = teamAssignments.find(t => t.workerIds.includes(editing.id));
-          if (a) await updateTeamAssignment(a.foremanId, a.workerIds.filter(id => id !== editing.id), a.equipmentIds);
+    try {
+      if (editing) {
+        pushUndo({ type: 'update', ids: [editing.id], previousData: [{ ...editing }], description: `Edit ${editing.name}` });
+        await updatePersonnel(editing.id, payload);
+        if (form.status === 'resigned' && editing.status !== 'resigned') {
+          if (editing.role === 'worker') {
+            const a = teamAssignments.find(t => t.workerIds.includes(editing.id));
+            if (a) await updateTeamAssignment(a.foremanId, a.workerIds.filter(id => id !== editing.id), a.equipmentIds);
+          }
+          if (editing.role === 'foreman') {
+            await setTeamAssignmentsBatch(teamAssignments.filter(a => a.foremanId !== editing.id));
+            await setEngineerAssignmentsBatch(engineerAssignments.map(a => ({ ...a, foremanIds: a.foremanIds.filter(id => id !== editing.id) })));
+          }
+          toast.success('Personnel resigned');
+        } else {
+          toast.success(messages.saved);
         }
-        if (editing.role === 'foreman') {
-          await setTeamAssignmentsBatch(teamAssignments.filter(a => a.foremanId !== editing.id));
-          await setEngineerAssignmentsBatch(engineerAssignments.map(a => ({ ...a, foremanIds: a.foremanIds.filter(id => id !== editing.id) })));
-        }
-        toast.success('人员已离职 Personnel resigned');
       } else {
+        const newId = await addPersonnel({ ...payload, joinDate: payload.joinDate || new Date().toISOString().split('T')[0] });
+        pushUndo({ type: 'add', ids: [newId], description: `Add ${form.name}` });
         toast.success(messages.saved);
       }
-    } else {
-      const newId = await addPersonnel({ ...payload, joinDate: payload.joinDate || new Date().toISOString().split('T')[0] });
-      pushUndo({ type: 'add', ids: [newId], description: `添加 ${form.name}` });
-      toast.success(messages.saved);
+      setDialogOpen(false);
+    } catch (err) {
+      toast.error(`Save failed: ${getErrorMessage(err)}`);
     }
-    setDialogOpen(false);
   };
 
   const handleDelete = async (id: string) => {
     const p = personnel.find(pp => pp.id === id);
-    if (p) pushUndo({ type: 'delete', ids: [id], previousData: [{ ...p }], description: `删除 ${p.name}` });
-    await dbDeletePersonnel(id);
-    toast.success(messages.deleted);
+    try {
+      await dbDeletePersonnel(id);
+      if (p) pushUndo({ type: 'delete', ids: [id], previousData: [{ ...p }], description: `Delete ${p.name}` });
+      toast.success(messages.deleted);
+    } catch (err) {
+      toast.error(`Delete failed: ${getErrorMessage(err)}`);
+    }
   };
 
   const handleReassign = async () => {
@@ -381,19 +391,27 @@ export default function PersonnelPage() {
 
   const handleBatchStatus = async () => {
     const ids = [...selectedIds];
-    await batchUpdatePersonnelStatus(ids, batchTargetStatus);
-    toast.success(`${ids.length} 人状态已更新 personnel status updated`);
-    setBatchStatusOpen(false);
-    setSelectedIds(new Set());
+    try {
+      await batchUpdatePersonnelStatus(ids, batchTargetStatus);
+      toast.success(`${ids.length} personnel status updated`);
+      setBatchStatusOpen(false);
+      setSelectedIds(new Set());
+    } catch (err) {
+      toast.error(`Batch update failed: ${getErrorMessage(err)}`);
+    }
   };
 
   const handleBatchDelete = async () => {
     const ids = [...selectedIds];
     const previousData = personnel.filter(p => ids.includes(p.id));
-    await batchDeletePersonnel(ids);
-    pushUndo({ type: 'delete', ids, previousData, description: `批量删除 ${ids.length} 人` });
-    toast.success(`${ids.length} 人已删除 personnel deleted`);
-    setSelectedIds(new Set());
+    try {
+      await batchDeletePersonnel(ids);
+      pushUndo({ type: 'delete', ids, previousData, description: `Batch delete ${ids.length} personnel` });
+      toast.success(`${ids.length} personnel deleted`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      toast.error(`Batch delete failed: ${getErrorMessage(err)}`);
+    }
   };
 
   const handleBatchAssignEngineer = async () => {

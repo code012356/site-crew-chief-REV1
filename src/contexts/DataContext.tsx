@@ -56,6 +56,49 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+const PAGE_SIZE = 1000;
+const MUTATION_CHUNK_SIZE = 100;
+
+function assertSupabaseOk(error: any, action: string) {
+  if (error) {
+    console.error(`${action} failed`, error);
+    throw new Error(error.message || `${action} failed`);
+  }
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+async function fetchAllRows(table: string, order?: { column: string; ascending?: boolean }) {
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let query = (supabase as any).from(table).select('*');
+    if (order) query = query.order(order.column, { ascending: order.ascending ?? true });
+    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    assertSupabaseOk(error, `Fetch ${table}`);
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function deleteRowsByIds(table: string, column: string, ids: string[]) {
+  for (const part of chunkArray(ids, MUTATION_CHUNK_SIZE)) {
+    const { error } = await (supabase as any).from(table).delete().in(column, part);
+    assertSupabaseOk(error, `Delete ${table}`);
+  }
+}
+
+async function updateRowsByIds(table: string, column: string, ids: string[], updates: Record<string, any>) {
+  for (const part of chunkArray(ids, MUTATION_CHUNK_SIZE)) {
+    const { error } = await (supabase as any).from(table).update(updates).in(column, part);
+    assertSupabaseOk(error, `Update ${table}`);
+  }
+}
+
 export const useDataContext = () => {
   const ctx = useContext(DataContext);
   if (!ctx) {
@@ -76,7 +119,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Fetch functions ──
   const fetchPersonnel = useCallback(async () => {
-    const { data } = await supabase.from('personnel').select('*').order('name');
+    const data = await fetchAllRows('personnel', { column: 'name' });
     if (data) {
       setPersonnel(data.map((r: any) => ({
         id: r.id,
@@ -106,7 +149,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchEquipment = useCallback(async () => {
-    const { data } = await supabase.from('equipment').select('*').order('name');
+    const data = await fetchAllRows('equipment', { column: 'name' });
     if (data) {
       setEquipment(data.map((r: any) => ({
         id: r.id,
@@ -120,14 +163,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchWorkCodes = useCallback(async () => {
-    const { data } = await supabase.from('work_codes').select('*').order('code');
+    const data = await fetchAllRows('work_codes', { column: 'code' });
     if (data) {
       setWorkCodes(data.map((r: any) => ({ id: r.id, code: r.code, name: r.name, category: r.category })));
     }
   }, []);
 
   const fetchTeamAssignments = useCallback(async () => {
-    const { data } = await supabase.from('team_assignments').select('*');
+    const data = await fetchAllRows('team_assignments');
     if (data) {
       setTeamAssignments(data.map((r: any) => ({
         foremanId: r.foreman_id,
@@ -138,7 +181,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchEngineerAssignments = useCallback(async () => {
-    const { data } = await supabase.from('engineer_assignments').select('*');
+    const data = await fetchAllRows('engineer_assignments');
     if (data) {
       setEngineerAssignments(data.map((r: any) => ({
         engineerId: r.engineer_id,
@@ -148,7 +191,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchDailyLogs = useCallback(async () => {
-    const { data } = await supabase.from('daily_logs').select('*').order('created_at', { ascending: false });
+    const data = await fetchAllRows('daily_logs', { column: 'created_at', ascending: false });
     if (data) {
       setDailyLogs(data.map((r: any) => ({
         id: r.id,
@@ -166,7 +209,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchEquipmentRequests = useCallback(async () => {
-    const { data } = await supabase.from('equipment_requests').select('*').order('created_at', { ascending: false });
+    const data = await fetchAllRows('equipment_requests', { column: 'created_at', ascending: false });
     if (data) {
       setEquipmentRequests(data.map((r: any) => ({
         id: r.id,
@@ -221,7 +264,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Personnel CRUD ──
   const addPersonnel = async (p: Omit<Personnel, 'id'>): Promise<string> => {
-    const { data } = await supabase.from('personnel').insert({
+    const { data, error } = await supabase.from('personnel').insert({
       labor_id: p.laborId || null, code_no: p.codeNo || null,
       passport_no: p.passportNo || null, visa_expiry_date: p.visaExpiryDate || null,
       name: p.name, role: p.role, phone: p.phone,
@@ -234,6 +277,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       work_line: p.workLine || null, actual_work: p.actualWork || null,
       seq_no: p.seqNo || null,
     }).select('id').single();
+    assertSupabaseOk(error, 'Add personnel');
     await fetchPersonnel();
     return data?.id || '';
   };
@@ -261,14 +305,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.workLine !== undefined) db.work_line = updates.workLine || null;
     if (updates.actualWork !== undefined) db.actual_work = updates.actualWork || null;
     if (updates.seqNo !== undefined) db.seq_no = updates.seqNo || null;
-    await supabase.from('personnel').update(db).eq('id', id);
+    const { error } = await supabase.from('personnel').update(db).eq('id', id);
+    assertSupabaseOk(error, 'Update personnel');
     await fetchPersonnel();
   };
 
   const deletePersonnel = async (id: string) => {
-    await supabase.from('personnel').delete().eq('id', id);
+    let result: any = await supabase.from('personnel').delete().eq('id', id);
+    assertSupabaseOk(result.error, 'Delete personnel');
     // Cascade: delete linked accounts
-    await supabase.from('accounts').delete().eq('linked_personnel_id', id);
+    result = await supabase.from('accounts').delete().eq('linked_personnel_id', id);
+    assertSupabaseOk(result.error, 'Delete linked account');
     // Also remove from team/engineer assignments
     const ta = teamAssignments.map(a => ({
       ...a,
@@ -285,7 +332,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const batchUpdatePersonnelStatus = async (ids: string[], status: PersonnelStatus) => {
     if (ids.length === 0) return;
-    await supabase.from('personnel').update({ status }).in('id', ids);
+    await updateRowsByIds('personnel', 'id', ids, { status });
     if (status === 'resigned') {
       const ta = teamAssignments.map(a => ({
         ...a, workerIds: a.workerIds.filter(wid => !ids.includes(wid)),
@@ -301,9 +348,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const batchDeletePersonnel = async (ids: string[]) => {
     if (ids.length === 0) return;
-    await supabase.from('personnel').delete().in('id', ids);
+    await deleteRowsByIds('personnel', 'id', ids);
     // Cascade: delete linked accounts
-    await supabase.from('accounts').delete().in('linked_personnel_id', ids);
+    await deleteRowsByIds('accounts', 'linked_personnel_id', ids);
     const ta = teamAssignments.map(a => ({
       ...a, workerIds: a.workerIds.filter(wid => !ids.includes(wid)),
     })).filter(a => !ids.includes(a.foremanId));
@@ -330,14 +377,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       work_line: p.workLine || null, actual_work: p.actualWork || null,
       seq_no: p.seqNo || null,
     }));
-    const { data } = await supabase.from('personnel').insert(rows).select('id');
+    const inserted: any[] = [];
+    for (const part of chunkArray(rows, MUTATION_CHUNK_SIZE)) {
+      const { data, error } = await supabase.from('personnel').insert(part).select('id');
+      assertSupabaseOk(error, 'Batch add personnel');
+      inserted.push(...(data || []));
+    }
     await fetchPersonnel();
-    return (data || []).map((r: any) => r.id);
+    return inserted.map((r: any) => r.id);
   };
 
   // ── Work code CRUD ──
   const addWorkCode = async (wc: Omit<WorkCode, 'id'>) => {
-    await supabase.from('work_codes').insert({ code: wc.code, name: wc.name, category: wc.category });
+    const { error } = await supabase.from('work_codes').insert({ code: wc.code, name: wc.name, category: wc.category });
+    assertSupabaseOk(error, 'Add work code');
     await fetchWorkCodes();
   };
   const updateWorkCode = async (id: string, updates: Partial<Omit<WorkCode, 'id'>>) => {
@@ -345,20 +398,23 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.code !== undefined) db.code = updates.code;
     if (updates.name !== undefined) db.name = updates.name;
     if (updates.category !== undefined) db.category = updates.category;
-    await supabase.from('work_codes').update(db).eq('id', id);
+    const { error } = await supabase.from('work_codes').update(db).eq('id', id);
+    assertSupabaseOk(error, 'Update work code');
     await fetchWorkCodes();
   };
   const deleteWorkCode = async (id: string) => {
-    await supabase.from('work_codes').delete().eq('id', id);
+    const { error } = await supabase.from('work_codes').delete().eq('id', id);
+    assertSupabaseOk(error, 'Delete work code');
     await fetchWorkCodes();
   };
 
   // ── Equipment CRUD ──
   const addEquipment = async (eq: Omit<Equipment, 'id'>) => {
-    await supabase.from('equipment').insert({
+    const { error } = await supabase.from('equipment').insert({
       equipment_no: eq.equipmentNo || null, name: eq.name, model: eq.model,
       status: eq.status, location: eq.location || null,
     });
+    assertSupabaseOk(error, 'Add equipment');
     await fetchEquipment();
   };
   const updateEquipment = async (id: string, updates: Partial<Omit<Equipment, 'id'>>) => {
@@ -368,19 +424,22 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.model !== undefined) db.model = updates.model;
     if (updates.status !== undefined) db.status = updates.status;
     if (updates.location !== undefined) db.location = updates.location;
-    await supabase.from('equipment').update(db).eq('id', id);
+    const { error } = await supabase.from('equipment').update(db).eq('id', id);
+    assertSupabaseOk(error, 'Update equipment');
     await fetchEquipment();
   };
   const deleteEquipment = async (id: string) => {
-    await supabase.from('equipment').delete().eq('id', id);
+    const { error } = await supabase.from('equipment').delete().eq('id', id);
+    assertSupabaseOk(error, 'Delete equipment');
     await fetchEquipment();
   };
 
   // ── Team assignment CRUD ──
   const updateTeamAssignment = async (foremanId: string, workerIds: string[], equipmentIds: string[]) => {
-    await supabase.from('team_assignments').upsert({
+    const { error } = await supabase.from('team_assignments').upsert({
       foreman_id: foremanId, worker_ids: workerIds, equipment_ids: equipmentIds,
     }, { onConflict: 'foreman_id' });
+    assertSupabaseOk(error, 'Update team assignment');
     await fetchTeamAssignments();
   };
 
@@ -410,34 +469,43 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const setTeamAssignmentsBatch = async (assignments: TeamAssignment[]) => {
     // Delete all existing, re-insert
-    await supabase.from('team_assignments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    let result: any = await supabase.from('team_assignments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    assertSupabaseOk(result.error, 'Clear team assignments');
     if (assignments.length > 0) {
-      await supabase.from('team_assignments').insert(
-        assignments.map(a => ({ foreman_id: a.foremanId, worker_ids: a.workerIds, equipment_ids: a.equipmentIds }))
-      );
+      for (const part of chunkArray(assignments, MUTATION_CHUNK_SIZE)) {
+        result = await supabase.from('team_assignments').insert(
+          part.map(a => ({ foreman_id: a.foremanId, worker_ids: a.workerIds, equipment_ids: a.equipmentIds }))
+        );
+        assertSupabaseOk(result.error, 'Insert team assignments');
+      }
     }
     await fetchTeamAssignments();
   };
 
   // ── Engineer assignment CRUD ──
   const setEngineerAssignmentsBatch = async (assignments: EngineerAssignment[]) => {
-    await supabase.from('engineer_assignments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    let result: any = await supabase.from('engineer_assignments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    assertSupabaseOk(result.error, 'Clear engineer assignments');
     if (assignments.length > 0) {
-      await supabase.from('engineer_assignments').insert(
-        assignments.map(a => ({ engineer_id: a.engineerId, foreman_ids: a.foremanIds }))
-      );
+      for (const part of chunkArray(assignments, MUTATION_CHUNK_SIZE)) {
+        result = await supabase.from('engineer_assignments').insert(
+          part.map(a => ({ engineer_id: a.engineerId, foreman_ids: a.foremanIds }))
+        );
+        assertSupabaseOk(result.error, 'Insert engineer assignments');
+      }
     }
     await fetchEngineerAssignments();
   };
 
   // ── Daily log CRUD ──
   const addDailyLog = async (log: Omit<DailyLog, 'id'>) => {
-    await supabase.from('daily_logs').insert({
+    const { error } = await supabase.from('daily_logs').insert({
       date: log.date, foreman_id: log.foremanId, foreman_name: log.foremanName,
       status: log.status, review_comment: log.reviewComment || null,
       entries: log.entries as any, equipment_usage: log.equipmentUsage as any,
       revisions: log.revisions as any || null,
     });
+    assertSupabaseOk(error, 'Add daily log');
     await fetchDailyLogs();
   };
 
@@ -452,12 +520,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.equipmentUsage !== undefined) db.equipment_usage = updates.equipmentUsage;
     if (updates.revisions !== undefined) db.revisions = updates.revisions;
     if (updates.deletedAt !== undefined) db.deleted_at = updates.deletedAt || null;
-    await supabase.from('daily_logs').update(db).eq('id', id);
+    const { error } = await supabase.from('daily_logs').update(db).eq('id', id);
+    assertSupabaseOk(error, 'Update daily log');
     await fetchDailyLogs();
   };
 
   const deleteDailyLog = async (id: string) => {
-    await supabase.from('daily_logs').delete().eq('id', id);
+    const { error } = await supabase.from('daily_logs').delete().eq('id', id);
+    assertSupabaseOk(error, 'Delete daily log');
     await fetchDailyLogs();
   };
 
@@ -466,20 +536,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const restoreDailyLog = async (id: string) => {
-    await supabase.from('daily_logs').update({ deleted_at: null }).eq('id', id);
+    const { error } = await supabase.from('daily_logs').update({ deleted_at: null }).eq('id', id);
+    assertSupabaseOk(error, 'Restore daily log');
     await fetchDailyLogs();
   };
 
   const emptyTrash = async (logIds: string[]) => {
-    for (const id of logIds) {
-      await supabase.from('daily_logs').delete().eq('id', id);
-    }
+    await deleteRowsByIds('daily_logs', 'id', logIds);
     await fetchDailyLogs();
   };
 
   // ── Equipment Request CRUD ──
   const addEquipmentRequest = async (req: Omit<EquipmentRequest, 'id' | 'createdAt' | 'resolvedAt'>) => {
-    await supabase.from('equipment_requests').insert({
+    const { error } = await supabase.from('equipment_requests').insert({
       requester_id: req.requesterId,
       requester_name: req.requesterName,
       requester_role: req.requesterRole,
@@ -490,6 +559,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       status: req.status,
       admin_comment: req.adminComment || null,
     } as any);
+    assertSupabaseOk(error, 'Add equipment request');
     await fetchEquipmentRequests();
   };
 
@@ -503,12 +573,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.equipmentId !== undefined) db.equipment_id = updates.equipmentId || null;
     if (updates.equipmentName !== undefined) db.equipment_name = updates.equipmentName;
     if (updates.reason !== undefined) db.reason = updates.reason;
-    await supabase.from('equipment_requests').update(db).eq('id', id);
+    const { error } = await supabase.from('equipment_requests').update(db).eq('id', id);
+    assertSupabaseOk(error, 'Update equipment request');
     await fetchEquipmentRequests();
   };
 
   const deleteEquipmentRequest = async (id: string) => {
-    await supabase.from('equipment_requests').delete().eq('id', id);
+    const { error } = await supabase.from('equipment_requests').delete().eq('id', id);
+    assertSupabaseOk(error, 'Delete equipment request');
     await fetchEquipmentRequests();
   };
 
