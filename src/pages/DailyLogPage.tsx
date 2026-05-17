@@ -192,6 +192,16 @@ export default function DailyLogPage() {
     return Math.max(0, Math.round(diff * 10) / 10);
   };
 
+  const roundDateTimeToHalfHour = (value: string) => {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+    const roundedMinutes = Math.round(dt.getMinutes() / 30) * 30;
+    dt.setMinutes(roundedMinutes, 0, 0);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  };
+
   const formatDT = (dt: string) => {
     if (!dt) return '-';
     return dt.replace('T', ' ');
@@ -221,11 +231,11 @@ export default function DailyLogPage() {
         return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '', area: wc?.area || e.area };
       }
       if (field === 'startTime') {
-        const newStart = value as string;
+        const newStart = roundDateTimeToHalfHour(value as string);
         return { ...e, startTime: newStart, hours: calcHours(newStart, e.endTime) };
       }
       if (field === 'endTime') {
-        const newEnd = value as string;
+        const newEnd = roundDateTimeToHalfHour(value as string);
         return { ...e, endTime: newEnd, hours: calcHours(e.startTime, newEnd) };
       }
       return { ...e, [field]: value };
@@ -244,11 +254,11 @@ export default function DailyLogPage() {
         return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '', area: wc?.area || e.area };
       }
       if (field === 'startTime') {
-        const newStart = value as string;
+        const newStart = roundDateTimeToHalfHour(value as string);
         return { ...e, startTime: newStart, hours: calcHours(newStart, e.endTime) };
       }
       if (field === 'endTime') {
-        const newEnd = value as string;
+        const newEnd = roundDateTimeToHalfHour(value as string);
         return { ...e, endTime: newEnd, hours: calcHours(e.startTime, newEnd) };
       }
       return { ...e, [field]: value };
@@ -634,11 +644,11 @@ export default function DailyLogPage() {
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">开始 Start</Label>}
-                      <Input type="datetime-local" value={entry.startTime} onChange={e => updateEntry(i, 'startTime', e.target.value)} className="h-9 text-xs" />
+                      <Input type="datetime-local" step={1800} value={entry.startTime} onChange={e => updateEntry(i, 'startTime', e.target.value)} className="h-9 text-xs" />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">结束 End</Label>}
-                      <Input type="datetime-local" value={entry.endTime} onChange={e => updateEntry(i, 'endTime', e.target.value)} className="h-9 text-xs" />
+                      <Input type="datetime-local" step={1800} value={entry.endTime} onChange={e => updateEntry(i, 'endTime', e.target.value)} className="h-9 text-xs" />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">工时 h</Label>}
@@ -721,11 +731,11 @@ export default function DailyLogPage() {
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">开始 Start</Label>}
-                      <Input type="datetime-local" value={entry.startTime} onChange={e => updateEqEntry(i, 'startTime', e.target.value)} className="h-9 text-xs" />
+                      <Input type="datetime-local" step={1800} value={entry.startTime} onChange={e => updateEqEntry(i, 'startTime', e.target.value)} className="h-9 text-xs" />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">结束 End</Label>}
-                      <Input type="datetime-local" value={entry.endTime} onChange={e => updateEqEntry(i, 'endTime', e.target.value)} className="h-9 text-xs" />
+                      <Input type="datetime-local" step={1800} value={entry.endTime} onChange={e => updateEqEntry(i, 'endTime', e.target.value)} className="h-9 text-xs" />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">工时 h</Label>}
@@ -1033,8 +1043,8 @@ export default function DailyLogPage() {
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">仅填写需要修改的字段，留空则不变 Only filled fields will be updated</p>
             <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">开始 Start</Label><Input type="datetime-local" value={bulkEdit.start || ''} onChange={e => setBulkEdit(p => ({ ...p, start: e.target.value }))} className="h-9" /></div>
-              <div><Label className="text-xs">结束 End</Label><Input type="datetime-local" value={bulkEdit.end || ''} onChange={e => setBulkEdit(p => ({ ...p, end: e.target.value }))} className="h-9" /></div>
+              <div><Label className="text-xs">开始 Start</Label><Input type="datetime-local" step={1800} value={bulkEdit.start || ''} onChange={e => setBulkEdit(p => ({ ...p, start: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
+              <div><Label className="text-xs">结束 End</Label><Input type="datetime-local" step={1800} value={bulkEdit.end || ''} onChange={e => setBulkEdit(p => ({ ...p, end: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
             </div>
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
@@ -1070,8 +1080,8 @@ export default function DailyLogPage() {
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">仅填写需要修改的字段，留空则不变 Only filled fields will be updated</p>
             <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">开始 Start</Label><Input type="datetime-local" value={bulkEdit.start || ''} onChange={e => setBulkEdit(p => ({ ...p, start: e.target.value }))} className="h-9" /></div>
-              <div><Label className="text-xs">结束 End</Label><Input type="datetime-local" value={bulkEdit.end || ''} onChange={e => setBulkEdit(p => ({ ...p, end: e.target.value }))} className="h-9" /></div>
+              <div><Label className="text-xs">开始 Start</Label><Input type="datetime-local" step={1800} value={bulkEdit.start || ''} onChange={e => setBulkEdit(p => ({ ...p, start: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
+              <div><Label className="text-xs">结束 End</Label><Input type="datetime-local" step={1800} value={bulkEdit.end || ''} onChange={e => setBulkEdit(p => ({ ...p, end: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
             </div>
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
