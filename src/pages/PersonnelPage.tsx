@@ -215,6 +215,11 @@ export default function PersonnelPage() {
     setFilterWorkLine('all'); setFilterProjectDept('all'); setSelectedIds(new Set());
   };
 
+  const getNextSeqNo = useCallback(() => {
+    const maxSeqNo = personnel.reduce((max, person) => Math.max(max, person.seqNo || 0), 0);
+    return maxSeqNo + 1;
+  }, [personnel]);
+
   const handleUndo = async () => {
     const last = undoStack[undoStack.length - 1];
     if (!last) return;
@@ -263,7 +268,7 @@ export default function PersonnelPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '', role: 'worker', phone: '', specialty: '', nationality: '', joinDate: '', projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: '' });
+    setForm({ name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '', role: 'worker', phone: '', specialty: '', nationality: '', joinDate: '', projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: String(getNextSeqNo()) });
     setDialogOpen(true);
   };
   const openEdit = (p: Personnel) => {
@@ -331,7 +336,7 @@ export default function PersonnelPage() {
       assignedTo: form.assignedTo || undefined,
       workLine: form.workLine || undefined,
       actualWork: form.actualWork || undefined,
-      seqNo: form.seqNo ? parseInt(form.seqNo) || undefined : undefined,
+      seqNo: editing ? (form.seqNo ? parseInt(form.seqNo) || undefined : undefined) : (parseInt(form.seqNo, 10) || getNextSeqNo()),
     };
     try {
       if (editing) {
@@ -846,7 +851,7 @@ export default function PersonnelPage() {
           <DialogHeader><DialogTitle>{editing ? '编辑人员 Edit Personnel' : '添加人员 Add Personnel'}</DialogTitle></DialogHeader>
           <DialogDescription className="sr-only">{editing ? 'Edit personnel info' : 'Add new personnel'}</DialogDescription>
           <div className="grid grid-cols-2 gap-3 py-2">
-            <div><Label>{fieldLabels.seqNo}</Label><Input type="number" placeholder="e.g. 1" value={form.seqNo} onChange={e => setForm(f => ({ ...f, seqNo: e.target.value }))} /></div>
+            <div><Label>{fieldLabels.seqNo}</Label><Input type="number" min={1} placeholder="Auto" value={form.seqNo} onChange={e => setForm(f => ({ ...f, seqNo: e.target.value }))} /></div>
             <div><Label>{fieldLabels.laborId}</Label><Input placeholder="e.g. LQ-7306" value={form.laborId} onChange={e => setForm(f => ({ ...f, laborId: e.target.value }))} /></div>
             <div><Label>{fieldLabels.codeNo}</Label><Input placeholder="e.g. L58827" value={form.codeNo} onChange={e => setForm(f => ({ ...f, codeNo: e.target.value }))} /></div>
             <div className="col-span-2"><Label>{fieldLabels.name} *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
