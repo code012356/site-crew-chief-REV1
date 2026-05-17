@@ -22,13 +22,30 @@ interface AreaDetail {
 interface DateTaggedEntry extends DailyLogEntry { _date: string; }
 interface DateTaggedEqEntry extends EquipmentUsageEntry { _date: string; }
 
-type TimeGranularity = 'day' | 'month' | 'year';
+type TimeGranularity = 'day' | 'week' | 'month' | 'year';
 
-const granularityLabels: Record<TimeGranularity, string> = { day: '按天 Daily', month: '按月 Monthly', year: '按年 Yearly' };
+const granularityLabels: Record<TimeGranularity, string> = {
+  day: 'Daily',
+  week: 'Weekly',
+  month: 'Monthly',
+  year: 'Yearly',
+};
+
+function getWeekPeriod(date: string): string {
+  const current = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(current.getTime())) return date;
+  const start = new Date(current);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  const yearStart = new Date(start.getFullYear(), 0, 1);
+  const week = Math.ceil((((start.getTime() - yearStart.getTime()) / 86400000) + yearStart.getDay() + 1) / 7);
+  return `${start.getFullYear()}-W${String(week).padStart(2, '0')}`;
+}
 
 function getTimePeriod(date: string, granularity: TimeGranularity): string {
   if (granularity === 'year') return date.substring(0, 4);
   if (granularity === 'month') return date.substring(0, 7);
+  if (granularity === 'week') return getWeekPeriod(date);
   return date;
 }
 
@@ -66,13 +83,14 @@ function TimePeriodSelector({
   return (
     <div className="flex items-center gap-2 mb-3">
       <Select value={granularity} onValueChange={v => { setGranularity(v as TimeGranularity); setPeriod('all'); }}>
-        <SelectTrigger className="w-[100px] h-8 text-xs">
+        <SelectTrigger className="w-[120px] h-8 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="day">按天 Daily</SelectItem>
-          <SelectItem value="month">按月 Monthly</SelectItem>
-          <SelectItem value="year">按年 Yearly</SelectItem>
+          <SelectItem value="day">Daily</SelectItem>
+          <SelectItem value="week">Weekly</SelectItem>
+          <SelectItem value="month">Monthly</SelectItem>
+          <SelectItem value="year">Yearly</SelectItem>
         </SelectContent>
       </Select>
       <Select value={period} onValueChange={setPeriod}>
@@ -95,13 +113,21 @@ const AREA_COLORS: Record<string, string> = {
 };
 
 // ─── Equipment Stacked Bar ───
-function EquipmentAreaChart({ eqUsage, title = '设备使用时长与区域' }: { eqUsage: DateTaggedEqEntry[]; title?: string }) {
+function EquipmentAreaChart({
+  eqUsage,
+  title = 'Equipment Hours by Area',
+  hideTimeFilter = false,
+}: {
+  eqUsage: DateTaggedEqEntry[];
+  title?: string;
+  hideTimeFilter?: boolean;
+}) {
   const [granularity, setGranularity] = useState<TimeGranularity>('day');
   const [period, setPeriod] = useState<string>('all');
 
   const allDates = useMemo(() => Array.from(new Set(eqUsage.map(e => e._date))), [eqUsage]);
   const periods = useMemo(() => getPeriodsFromDates(allDates, granularity), [allDates, granularity]);
-  const filtered = useMemo(() => filterByPeriod(eqUsage, period, granularity), [eqUsage, period, granularity]);
+  const filtered = useMemo(() => hideTimeFilter ? eqUsage : filterByPeriod(eqUsage, period, granularity), [eqUsage, period, granularity, hideTimeFilter]);
 
   const allAreas = useMemo(() => Array.from(new Set(filtered.map(e => e.area.split('-')[0]))).sort(), [filtered]);
 
@@ -120,7 +146,9 @@ function EquipmentAreaChart({ eqUsage, title = '设备使用时长与区域' }: 
 
   return (
     <ChartCard title={title}>
-      <TimePeriodSelector granularity={granularity} setGranularity={setGranularity} period={period} setPeriod={setPeriod} periods={periods} />
+      {!hideTimeFilter && (
+        <TimePeriodSelector granularity={granularity} setGranularity={setGranularity} period={period} setPeriod={setPeriod} periods={periods} />
+      )}
       {stackedData.length > 0 ? (
         <ResponsiveContainer width="100%" height={Math.max(200, stackedData.length * 45 + 40)}>
           <BarChart data={stackedData} layout="vertical" margin={{ left: 30, right: 10 }}>
@@ -240,7 +268,14 @@ function ForemanAnalytics() {
   const teamWorkers = getTeamWorkers(foremanId);
   const teamEquip = getTeamEquipment(foremanId);
   const logs = dailyLogs.filter(l => !l.deletedAt && l.foremanId === foremanId && (l.status === 'approved' || l.status === 'conditional'));
-  const { entries, eqUsage } = tagEntries(logs);
+  const [granularity, setGranularity] = useState<TimeGranularity>('month');
+  const [period, setPeriod] = useState<string>('all');
+  const periods = useMemo(() => getPeriodsFromDates(logs.map(log => log.date), granularity), [logs, granularity]);
+  const filteredLogs = useMemo(() => {
+    if (period === 'all') return logs;
+    return logs.filter(log => getTimePeriod(log.date, granularity) === period);
+  }, [logs, period, granularity]);
+  const { entries, eqUsage } = tagEntries(filteredLogs);
 
   const totalHours = entries.reduce((s, e) => s + e.hours, 0);
   const totalEqHours = eqUsage.reduce((s, e) => s + e.hours, 0);
@@ -256,6 +291,19 @@ function ForemanAnalytics() {
 
   return (
     <>
+      <div className="bg-card rounded-lg border shadow-sm p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">Data Range:</span>
+          <TimePeriodSelector
+            granularity={granularity}
+            setGranularity={setGranularity}
+            period={period}
+            setPeriod={setPeriod}
+            periods={periods}
+          />
+          <span className="text-xs text-muted-foreground">Filtered logs: {filteredLogs.length}</span>
+        </div>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <StatCard label="班组工人 Team Workers" value={teamWorkers.length} unit="" />
         <StatCard label="班组设备 Team Equipment" value={teamEquip.length} unit="" />
@@ -378,7 +426,7 @@ function EngineerAnalytics() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
               <h4 className="text-sm font-medium text-muted-foreground mb-2">
-                在班工人 & 设备使用 Workers & Equipment ({granularity === 'day' ? '按天 Daily' : granularity === 'month' ? '按月 Monthly' : '按年 Yearly'})
+                在班工人 & 设备使用 Workers & Equipment ({granularity === 'day' ? 'Daily' : granularity === 'week' ? 'Weekly' : granularity === 'month' ? 'Monthly' : 'Yearly'})
               </h4>
               {fm.dailyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
@@ -408,7 +456,14 @@ function EngineerAnalytics() {
 function AdminAnalytics() {
   const { personnel, equipment, teamAssignments, dailyLogs } = useDataContext();
   const approvedLogs = dailyLogs.filter(l => !l.deletedAt && (l.status === 'approved' || l.status === 'conditional'));
-  const { entries: allEntries, eqUsage: allEqUsage } = tagEntries(approvedLogs);
+  const [granularity, setGranularity] = useState<TimeGranularity>('month');
+  const [period, setPeriod] = useState<string>('all');
+  const periods = useMemo(() => getPeriodsFromDates(approvedLogs.map(log => log.date), granularity), [approvedLogs, granularity]);
+  const filteredLogs = useMemo(() => {
+    if (period === 'all') return approvedLogs;
+    return approvedLogs.filter(log => getTimePeriod(log.date, granularity) === period);
+  }, [approvedLogs, period, granularity]);
+  const { entries: allEntries, eqUsage: allEqUsage } = tagEntries(filteredLogs);
   const foremen = personnel.filter(p => p.role === 'foreman');
 
   const totalHours = allEntries.reduce((s, e) => s + e.hours, 0);
@@ -425,7 +480,7 @@ function AdminAnalytics() {
 
   const foremanSummary = foremen.map(fm => {
     const assignment = teamAssignments.find(a => a.foremanId === fm.id);
-    const fmLogs = approvedLogs.filter(l => l.foremanId === fm.id);
+    const fmLogs = filteredLogs.filter(l => l.foremanId === fm.id);
     const { entries: fmEntries, eqUsage: fmEqUsage } = tagEntries(fmLogs);
     const workerIds = assignment?.workerIds || [];
     const eqIds = assignment?.equipmentIds || [];
@@ -447,6 +502,19 @@ function AdminAnalytics() {
 
   return (
     <>
+      <div className="bg-card rounded-lg border shadow-sm p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">Data Range:</span>
+          <TimePeriodSelector
+            granularity={granularity}
+            setGranularity={setGranularity}
+            period={period}
+            setPeriod={setPeriod}
+            periods={periods}
+          />
+          <span className="text-xs text-muted-foreground">Filtered logs: {filteredLogs.length}</span>
+        </div>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <StatCard label="总工时 Total Hours" value={totalHours} unit="h" />
         <StatCard label="参与工人 Workers" value={totalWorkers} unit="" />
@@ -490,8 +558,8 @@ function AdminAnalytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <EquipmentAreaChart eqUsage={allEqUsage} title="设备使用时长与区域 Equipment Hours by Area" />
-        <AreaPieChart entries={allEntries} eqUsage={allEqUsage} title="施工区域工时分布 Area Hours Distribution" />
+        <EquipmentAreaChart eqUsage={allEqUsage} title="Equipment Hours by Area" hideTimeFilter />
+        <AreaPieChart entries={allEntries} eqUsage={allEqUsage} title="Area Hours Distribution" hideTimeFilter />
       </div>
     </>
   );
@@ -519,8 +587,8 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 // ─── Main ───
 const roleSubtitles = {
   foreman: '您的班组工人工时与设备使用数据 Your team worker hours and equipment usage',
-  engineer: '各工长班组数据，支持按天/月/年筛选 Foreman team data, filter by day/month/year',
-  admin: '项目整体数据概览 Project-wide data overview',
+  engineer: 'Foreman team data, filter by day/week/month/year',
+  admin: 'Project-wide data overview, filter by day/week/month/year',
 };
 
 export default function AnalyticsPage() {
