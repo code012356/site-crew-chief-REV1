@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { DailyLog, Equipment, EquipmentStatus, Personnel, PersonnelStatus, WorkCode } from './types';
+import { DailyLog, Equipment, EquipmentStatus, Personnel, WorkCode } from './types';
 
 const gradeToRole: Record<string, Personnel['role']> = {
   FOREMAN: 'foreman',
@@ -21,24 +21,6 @@ const roleToGrade: Record<Personnel['role'], string> = {
   worker: 'Labor',
   foreman: 'FOREMAN',
   engineer: 'Engineer',
-};
-
-const statusMap: Record<string, PersonnelStatus> = {
-  在班: 'active',
-  Active: 'active',
-  active: 'active',
-  休假: 'leave',
-  'On Leave': 'leave',
-  leave: 'leave',
-  离职: 'resigned',
-  Resigned: 'resigned',
-  resigned: 'resigned',
-};
-
-const statusLabelMap: Record<PersonnelStatus, string> = {
-  active: '在班 Active',
-  leave: '休假 On Leave',
-  resigned: '离职 Resigned',
 };
 
 const eqStatusMap: Record<string, EquipmentStatus> = {
@@ -87,12 +69,6 @@ const personnelHeaders = [
   '一线/二线 Site/Indirect',
   '现场实际工作 Actual Work',
   '入场日期 Entry Date',
-  '归属(入) Entry From',
-  '退场日期 Exit Date',
-  '归属(退) Exit To',
-  '2025休假 Leave 2025',
-  '2026休假 Leave 2026',
-  '状态 Status',
   '电话 Phone',
 ];
 
@@ -132,12 +108,6 @@ export function exportPersonnel(data: Personnel[]) {
     '一线/二线 Site/Indirect': p.workLine || '',
     '现场实际工作 Actual Work': p.actualWork || '',
     '入场日期 Entry Date': p.joinDate,
-    '归属(入) Entry From': p.entryAffiliation || '',
-    '退场日期 Exit Date': p.exitDate || '',
-    '归属(退) Exit To': p.exitAffiliation || '',
-    '2025休假 Leave 2025': p.leaveRecords2025 || '',
-    '2026休假 Leave 2026': p.leaveRecords2026 || '',
-    '状态 Status': statusLabelMap[p.status],
     '电话 Phone': p.phone,
   }));
   const ws = data.length > 0 ? XLSX.utils.json_to_sheet(rows) : XLSX.utils.aoa_to_sheet([personnelHeaders]);
@@ -158,10 +128,6 @@ export function importPersonnel(file: File): Promise<Personnel[]> {
         const today = new Date().toISOString().split('T')[0];
         const personnel: Personnel[] = rows.map((row, index) => {
           const grade = getByHeader(row, ['Grade_Admin', 'Grade_Operational', 'Grade', '等级']);
-          const exitDate = getByHeader(row, ['Exit Date', '退场日期']);
-          const exitAffiliation = getByHeader(row, ['Exit To', '归属(退)', '归属.1']);
-          const statusRaw = getByHeader(row, ['Status', '状态']);
-          const status = statusMap[statusRaw] || (exitDate || exitAffiliation ? 'resigned' : 'active');
           const seqRaw = getByHeader(row, ['No.', '序列']);
 
           return {
@@ -173,15 +139,10 @@ export function importPersonnel(file: File): Promise<Personnel[]> {
             name: getByHeader(row, ['Full_Name', 'Full Name', 'Name', '姓名']),
             role: gradeToRole[grade] || 'worker',
             phone: getByHeader(row, ['Phone', '电话']),
-            status,
+            status: 'active',
             specialty: getByHeader(row, ['Position_Admin', 'Position_Operational', 'Position', '工种']) || undefined,
             nationality: getByHeader(row, ['Nationality_Admin', 'Nationality_Operational', 'Nationality', '国籍']) || undefined,
             joinDate: parseDate(getByHeader(row, ['Date of join', 'Entry Date', '入场日期', '入职日期']), today),
-            entryAffiliation: getByHeader(row, ['Entry From', '归属(入)']) || undefined,
-            exitDate: parseDate(exitDate) || undefined,
-            exitAffiliation: exitAffiliation || undefined,
-            leaveRecords2025: getByHeader(row, ['2025']) || undefined,
-            leaveRecords2026: getByHeader(row, ['2026']) || undefined,
             projectDept: getByHeader(row, ['Project/Dept', 'Project', '所属项目', '部门']) || undefined,
             assignedTo: getByHeader(row, ['Assigned To', 'Foreman', 'Engineer', 'Officer', '所属工长']) || undefined,
             workLine: getByHeader(row, ['Site/Indirect', '一线', '二线']) || undefined,

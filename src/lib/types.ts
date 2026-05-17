@@ -17,11 +17,6 @@ export interface Personnel {
   specialty?: string;
   nationality?: string;
   joinDate: string;
-  entryAffiliation?: string;
-  exitDate?: string;
-  exitAffiliation?: string;
-  leaveRecords2025?: string;
-  leaveRecords2026?: string;
   projectDept?: string;
   assignedTo?: string;
   workLine?: string;

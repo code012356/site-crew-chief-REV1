@@ -134,11 +134,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         specialty: r.specialty || undefined,
         nationality: r.nationality || undefined,
         joinDate: r.join_date,
-        entryAffiliation: r.entry_affiliation || undefined,
-        exitDate: r.exit_date || undefined,
-        exitAffiliation: r.exit_affiliation || undefined,
-        leaveRecords2025: r.leave_records_2025 || undefined,
-        leaveRecords2026: r.leave_records_2026 || undefined,
         projectDept: r.project_dept || undefined,
         assignedTo: r.assigned_to || undefined,
         workLine: r.work_line || undefined,
@@ -270,9 +265,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       name: p.name, role: p.role, phone: p.phone,
       status: p.status, specialty: p.specialty || null,
       nationality: p.nationality || null, join_date: p.joinDate,
-      entry_affiliation: p.entryAffiliation || null,
-      exit_date: p.exitDate || null, exit_affiliation: p.exitAffiliation || null,
-      leave_records_2025: p.leaveRecords2025 || null, leave_records_2026: p.leaveRecords2026 || null,
       project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
       work_line: p.workLine || null, actual_work: p.actualWork || null,
       seq_no: p.seqNo || null,
@@ -295,11 +287,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.specialty !== undefined) db.specialty = updates.specialty || null;
     if (updates.nationality !== undefined) db.nationality = updates.nationality || null;
     if (updates.joinDate !== undefined) db.join_date = updates.joinDate;
-    if (updates.entryAffiliation !== undefined) db.entry_affiliation = updates.entryAffiliation || null;
-    if (updates.exitDate !== undefined) db.exit_date = updates.exitDate || null;
-    if (updates.exitAffiliation !== undefined) db.exit_affiliation = updates.exitAffiliation || null;
-    if (updates.leaveRecords2025 !== undefined) db.leave_records_2025 = updates.leaveRecords2025 || null;
-    if (updates.leaveRecords2026 !== undefined) db.leave_records_2026 = updates.leaveRecords2026 || null;
     if (updates.projectDept !== undefined) db.project_dept = updates.projectDept || null;
     if (updates.assignedTo !== undefined) db.assigned_to = updates.assignedTo || null;
     if (updates.workLine !== undefined) db.work_line = updates.workLine || null;
@@ -370,9 +357,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       name: p.name, role: p.role, phone: p.phone,
       status: p.status, specialty: p.specialty || null,
       nationality: p.nationality || null, join_date: p.joinDate,
-      entry_affiliation: p.entryAffiliation || null,
-      exit_date: p.exitDate || null, exit_affiliation: p.exitAffiliation || null,
-      leave_records_2025: p.leaveRecords2025 || null, leave_records_2026: p.leaveRecords2026 || null,
       project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
       work_line: p.workLine || null, actual_work: p.actualWork || null,
       seq_no: p.seqNo || null,

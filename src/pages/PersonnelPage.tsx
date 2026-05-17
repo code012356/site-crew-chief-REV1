@@ -2,9 +2,9 @@ import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDataContext } from '@/contexts/DataContext';
 import { useAppContext } from '@/contexts/AppContext';
-import { Personnel, PersonnelStatus } from '@/lib/types';
+import { Personnel } from '@/lib/types';
 import { exportPersonnel, importPersonnel } from '@/lib/excel-utils';
-import { Plus, Search, Edit2, Trash2, Download, Upload, ArrowRightLeft, CheckSquare, AlertTriangle, UserCog, UserPlus, RotateCcw, Undo2, FilterX } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Download, Upload, ArrowRightLeft, AlertTriangle, UserCog, UserPlus, RotateCcw, Undo2, FilterX, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { pageTitles, fieldLabels, actionLabels, filterLabels, roleLabels, personnelStatusLabels, messages } from '@/lib/i18n';
+import { pageTitles, fieldLabels, actionLabels, filterLabels, roleLabels, messages } from '@/lib/i18n';
 
 type UndoAction = {
   type: 'add' | 'update' | 'delete' | 'batch_add';
@@ -32,7 +32,7 @@ type ImportCandidate = {
 export default function PersonnelPage() {
   const {
     personnel, teamAssignments, engineerAssignments,
-    addPersonnel, updatePersonnel, deletePersonnel: dbDeletePersonnel, batchUpdatePersonnelStatus,
+    addPersonnel, updatePersonnel, deletePersonnel: dbDeletePersonnel,
     batchDeletePersonnel, batchAddPersonnel,
     updateTeamAssignment, setTeamAssignmentsBatch, setEngineerAssignmentsBatch,
   } = useDataContext();
@@ -40,7 +40,6 @@ export default function PersonnelPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterForeman, setFilterForeman] = useState<string>('all');
   const [filterEngineer, setFilterEngineer] = useState<string>('all');
   const [filterSpecialty, setFilterSpecialty] = useState<string>('all');
@@ -51,9 +50,8 @@ export default function PersonnelPage() {
   const [editing, setEditing] = useState<Personnel | null>(null);
   const [form, setForm] = useState({
     name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '',
-    role: 'worker' as Personnel['role'], phone: '', status: 'active' as PersonnelStatus,
-    specialty: '', nationality: '', joinDate: '', entryAffiliation: '',
-    exitDate: '', exitAffiliation: '', leaveRecords2025: '', leaveRecords2026: '',
+    role: 'worker' as Personnel['role'], phone: '',
+    specialty: '', nationality: '', joinDate: '',
     projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: '' as string,
   });
 
@@ -63,11 +61,11 @@ export default function PersonnelPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchReassignOpen, setBatchReassignOpen] = useState(false);
-  const [batchStatusOpen, setBatchStatusOpen] = useState(false);
   const [batchTargetForeman, setBatchTargetForeman] = useState<string>('none');
-  const [batchTargetStatus, setBatchTargetStatus] = useState<PersonnelStatus>('active');
   const [batchAssignEngineerOpen, setBatchAssignEngineerOpen] = useState(false);
   const [batchTargetEngineer, setBatchTargetEngineer] = useState<string>('none');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const [assignEngineerOpen, setAssignEngineerOpen] = useState(false);
   const [assignTargetForeman, setAssignTargetForeman] = useState<Personnel | null>(null);
@@ -96,6 +94,25 @@ export default function PersonnelPage() {
   const workLineOptions = useMemo(() => [...new Set(personnel.map(p => p.workLine).filter(Boolean))].sort() as string[], [personnel]);
   const projectDeptOptions = useMemo(() => [...new Set(personnel.map(p => p.projectDept).filter(Boolean))].sort() as string[], [personnel]);
 
+  const personnelById = useMemo(() => new Map(personnel.map(p => [p.id, p])), [personnel]);
+  const linkedAccountIds = useMemo(() => new Set(accounts.filter(a => a.enabled && a.linkedPersonnelId).map(a => a.linkedPersonnelId as string)), [accounts]);
+  const foremanAssignmentMap = useMemo(() => new Map(teamAssignments.map(a => [a.foremanId, a])), [teamAssignments]);
+  const engineerAssignmentMap = useMemo(() => new Map(engineerAssignments.map(a => [a.engineerId, a])), [engineerAssignments]);
+  const workerForemanIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const assignment of teamAssignments) {
+      for (const workerId of assignment.workerIds) map.set(workerId, assignment.foremanId);
+    }
+    return map;
+  }, [teamAssignments]);
+  const foremanEngineerIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const assignment of engineerAssignments) {
+      for (const foremanId of assignment.foremanIds) map.set(foremanId, assignment.engineerId);
+    }
+    return map;
+  }, [engineerAssignments]);
+
   // Scrollbar sync refs
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -112,26 +129,23 @@ export default function PersonnelPage() {
   };
 
   const hasLinkedAccount = (personnelId: string) => {
-    return accounts.some(a => a.linkedPersonnelId === personnelId && a.enabled);
+    return linkedAccountIds.has(personnelId);
   };
 
   const getWorkerForeman = (workerId: string) => {
-    const assignment = teamAssignments.find(a => a.workerIds.includes(workerId));
-    if (!assignment) return null;
-    return personnel.find(p => p.id === assignment.foremanId) || null;
+    const foremanId = workerForemanIdMap.get(workerId);
+    return foremanId ? personnelById.get(foremanId) || null : null;
   };
 
   const getForemanEngineer = (foremanId: string) => {
-    const assignment = engineerAssignments.find(a => a.foremanIds.includes(foremanId));
-    if (!assignment) return null;
-    return personnel.find(p => p.id === assignment.engineerId) || null;
+    const engineerId = foremanEngineerIdMap.get(foremanId);
+    return engineerId ? personnelById.get(engineerId) || null : null;
   };
 
   const filtered = useMemo(() => {
     return personnel.filter(p => {
       if (search && !p.name.includes(search) && !(p.laborId || '').includes(search) && !(p.codeNo || '').includes(search) && !(p.nationality || '').toLowerCase().includes(search.toLowerCase())) return false;
       if (filterRole !== 'all' && p.role !== filterRole) return false;
-      if (filterStatus !== 'all' && p.status !== filterStatus) return false;
       if (filterSpecialty !== 'all' && (p.specialty || '') !== filterSpecialty) return false;
       if (filterNationality !== 'all' && (p.nationality || '') !== filterNationality) return false;
       if (filterWorkLine !== 'all' && (p.workLine || '') !== filterWorkLine) return false;
@@ -140,9 +154,9 @@ export default function PersonnelPage() {
       if (filterForeman !== 'all') {
         if (p.role === 'worker') {
           if (filterForeman === 'none') {
-            if (teamAssignments.some(a => a.workerIds.includes(p.id))) return false;
+            if (workerForemanIdMap.has(p.id)) return false;
           } else {
-            const assignment = teamAssignments.find(a => a.foremanId === filterForeman);
+            const assignment = foremanAssignmentMap.get(filterForeman);
             if (!assignment || !assignment.workerIds.includes(p.id)) return false;
           }
         } else {
@@ -153,7 +167,7 @@ export default function PersonnelPage() {
       // Engineer filter: show only foremen under that engineer (not the engineer itself)
       if (filterEngineer !== 'all') {
         if (p.role === 'foreman') {
-          const assignment = engineerAssignments.find(a => a.engineerId === filterEngineer);
+          const assignment = engineerAssignmentMap.get(filterEngineer);
           if (!assignment || !assignment.foremanIds.includes(p.id)) return false;
         } else {
           // Hide workers and engineers when filtering by engineer - only show foremen
@@ -162,7 +176,11 @@ export default function PersonnelPage() {
       }
       return true;
     });
-  }, [personnel, search, filterRole, filterStatus, filterForeman, filterEngineer, filterSpecialty, filterNationality, filterWorkLine, filterProjectDept, teamAssignments, engineerAssignments]);
+  }, [personnel, search, filterRole, filterForeman, filterEngineer, filterSpecialty, filterNationality, filterWorkLine, filterProjectDept, workerForemanIdMap, foremanAssignmentMap, engineerAssignmentMap]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterRole, filterForeman, filterEngineer, filterSpecialty, filterNationality, filterWorkLine, filterProjectDept, pageSize]);
 
   // ResizeObserver for top scrollbar sync
   useEffect(() => {
@@ -176,18 +194,23 @@ export default function PersonnelPage() {
     return () => observer.disconnect();
   }, [filtered.length]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * pageSize;
+  const paginated = filtered.slice(pageStart, pageStart + pageSize);
+  const pageBatchable = paginated.filter(p => p.role === 'worker' || p.role === 'foreman');
   const batchableFiltered = filtered.filter(p => p.role === 'worker' || p.role === 'foreman');
   const selectedBatchable = batchableFiltered.filter(p => selectedIds.has(p.id));
-  const allBatchableSelected = batchableFiltered.length > 0 && batchableFiltered.every(p => selectedIds.has(p.id));
+  const allBatchableSelected = pageBatchable.length > 0 && pageBatchable.every(p => selectedIds.has(p.id));
   const someBatchableSelected = selectedBatchable.length > 0;
 
   const showForemanFilter = filterRole === 'all' || filterRole === 'worker';
   const showEngineerFilter = filterRole === 'all' || filterRole === 'foreman';
 
-  const hasActiveFilters = search || filterRole !== 'all' || filterStatus !== 'all' || filterForeman !== 'all' || filterEngineer !== 'all' || filterSpecialty !== 'all' || filterNationality !== 'all' || filterWorkLine !== 'all' || filterProjectDept !== 'all';
+  const hasActiveFilters = search || filterRole !== 'all' || filterForeman !== 'all' || filterEngineer !== 'all' || filterSpecialty !== 'all' || filterNationality !== 'all' || filterWorkLine !== 'all' || filterProjectDept !== 'all';
 
   const resetFilters = () => {
-    setSearch(''); setFilterRole('all'); setFilterStatus('all'); setFilterForeman('all');
+    setSearch(''); setFilterRole('all'); setFilterForeman('all');
     setFilterEngineer('all'); setFilterSpecialty('all'); setFilterNationality('all');
     setFilterWorkLine('all'); setFilterProjectDept('all'); setSelectedIds(new Set());
   };
@@ -212,11 +235,10 @@ export default function PersonnelPage() {
 
   // Helper: get engineer for a worker (via foreman chain)
   const getWorkerEngineer = (workerId: string) => {
-    const team = teamAssignments.find(a => a.workerIds.includes(workerId));
-    if (!team) return null;
-    const engAssign = engineerAssignments.find(a => a.foremanIds.includes(team.foremanId));
-    if (!engAssign) return null;
-    return personnel.find(p => p.id === engAssign.engineerId) || null;
+    const foremanId = workerForemanIdMap.get(workerId);
+    if (!foremanId) return null;
+    const engineerId = foremanEngineerIdMap.get(foremanId);
+    return engineerId ? personnelById.get(engineerId) || null : null;
   };
 
   const toggleSelect = (id: string) => {
@@ -229,25 +251,27 @@ export default function PersonnelPage() {
 
   const toggleSelectAll = () => {
     if (allBatchableSelected) {
-      setSelectedIds(new Set());
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        for (const person of pageBatchable) next.delete(person.id);
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(batchableFiltered.map(p => p.id)));
+      setSelectedIds(prev => new Set([...prev, ...pageBatchable.map(p => p.id)]));
     }
   };
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '', role: 'worker', phone: '', status: 'active', specialty: '', nationality: '', joinDate: '', entryAffiliation: '', exitDate: '', exitAffiliation: '', leaveRecords2025: '', leaveRecords2026: '', projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: '' });
+    setForm({ name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '', role: 'worker', phone: '', specialty: '', nationality: '', joinDate: '', projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: '' });
     setDialogOpen(true);
   };
   const openEdit = (p: Personnel) => {
     setEditing(p);
     setForm({
       name: p.name, laborId: p.laborId || '', codeNo: p.codeNo || '', passportNo: p.passportNo || '',
-      visaExpiryDate: p.visaExpiryDate || '', role: p.role, phone: p.phone, status: p.status,
+      visaExpiryDate: p.visaExpiryDate || '', role: p.role, phone: p.phone,
       specialty: p.specialty || '', nationality: p.nationality || '', joinDate: p.joinDate,
-      entryAffiliation: p.entryAffiliation || '', exitDate: p.exitDate || '', exitAffiliation: p.exitAffiliation || '',
-      leaveRecords2025: p.leaveRecords2025 || '', leaveRecords2026: p.leaveRecords2026 || '',
       projectDept: p.projectDept || '', assignedTo: p.assignedTo || '', workLine: p.workLine || '',
       actualWork: p.actualWork || '', seqNo: p.seqNo?.toString() || '',
     });
@@ -302,11 +326,7 @@ export default function PersonnelPage() {
       specialty: form.specialty || undefined,
       nationality: form.nationality || undefined,
       joinDate: form.joinDate || new Date().toISOString().split('T')[0],
-      entryAffiliation: form.entryAffiliation || undefined,
-      exitDate: form.exitDate || undefined,
-      exitAffiliation: form.exitAffiliation || undefined,
-      leaveRecords2025: form.leaveRecords2025 || undefined,
-      leaveRecords2026: form.leaveRecords2026 || undefined,
+      status: editing?.status || 'active' as const,
       projectDept: form.projectDept || undefined,
       assignedTo: form.assignedTo || undefined,
       workLine: form.workLine || undefined,
@@ -317,19 +337,7 @@ export default function PersonnelPage() {
       if (editing) {
         pushUndo({ type: 'update', ids: [editing.id], previousData: [{ ...editing }], description: `Edit ${editing.name}` });
         await updatePersonnel(editing.id, payload);
-        if (form.status === 'resigned' && editing.status !== 'resigned') {
-          if (editing.role === 'worker') {
-            const a = teamAssignments.find(t => t.workerIds.includes(editing.id));
-            if (a) await updateTeamAssignment(a.foremanId, a.workerIds.filter(id => id !== editing.id), a.equipmentIds);
-          }
-          if (editing.role === 'foreman') {
-            await setTeamAssignmentsBatch(teamAssignments.filter(a => a.foremanId !== editing.id));
-            await setEngineerAssignmentsBatch(engineerAssignments.map(a => ({ ...a, foremanIds: a.foremanIds.filter(id => id !== editing.id) })));
-          }
-          toast.success('Personnel resigned');
-        } else {
-          toast.success(messages.saved);
-        }
+        toast.success(messages.saved);
       } else {
         const newId = await addPersonnel({ ...payload, joinDate: payload.joinDate || new Date().toISOString().split('T')[0] });
         pushUndo({ type: 'add', ids: [newId], description: `Add ${form.name}` });
@@ -387,18 +395,6 @@ export default function PersonnelPage() {
     toast.success(`${workerIds.length} 名工人已调配至 workers reassigned to ${targetName}`);
     setBatchReassignOpen(false);
     setSelectedIds(new Set());
-  };
-
-  const handleBatchStatus = async () => {
-    const ids = [...selectedIds];
-    try {
-      await batchUpdatePersonnelStatus(ids, batchTargetStatus);
-      toast.success(`${ids.length} personnel status updated`);
-      setBatchStatusOpen(false);
-      setSelectedIds(new Set());
-    } catch (err) {
-      toast.error(`Batch update failed: ${getErrorMessage(err)}`);
-    }
   };
 
   const handleBatchDelete = async () => {
@@ -620,15 +616,6 @@ export default function PersonnelPage() {
             <SelectItem value="engineer">{roleLabels.engineer}</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{filterLabels.allStatus}</SelectItem>
-            <SelectItem value="active">{personnelStatusLabels.active}</SelectItem>
-            <SelectItem value="leave">{personnelStatusLabels.leave}</SelectItem>
-            <SelectItem value="resigned">{personnelStatusLabels.resigned}</SelectItem>
-          </SelectContent>
-        </Select>
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5 text-muted-foreground hover:text-foreground h-10">
             <FilterX size={16} /> 重置 Reset
@@ -718,9 +705,6 @@ export default function PersonnelPage() {
               <UserCog size={14} /> 批量分配工程师 Batch Assign Engineer
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => { setBatchTargetStatus('active'); setBatchStatusOpen(true); }} className="gap-1.5">
-            <CheckSquare size={14} /> 批量改状态 Batch Status
-          </Button>
           <Button variant="outline" size="sm" onClick={handleBatchDelete} className="gap-1.5 text-destructive hover:text-destructive">
             <Trash2 size={14} /> 批量删除 Batch Delete
           </Button>
@@ -737,7 +721,7 @@ export default function PersonnelPage() {
         <div style={{ width: tableWidth, height: 1 }} />
       </div>
       <div ref={tableWrapperRef} className="bg-card rounded-b-lg border shadow-sm overflow-x-auto" onScroll={() => syncScroll('bottom')}>
-        <table className="w-full text-sm min-w-[1800px]">
+        <table className="w-full text-sm min-w-[1380px]">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="px-3 py-3 w-10">
@@ -758,17 +742,11 @@ export default function PersonnelPage() {
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.passportNo}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.visaExpiryDate}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.joinDate}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.entryAffiliation}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.exitDate}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.exitAffiliation}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.leaveRecords2025}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.leaveRecords2026}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.status}</th>
               <th className="text-right px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.actions}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.map((p, idx) => {
+            {paginated.map((p, idx) => {
               const isBatchable = p.role === 'worker' || p.role === 'foreman';
               const fm = p.role === 'worker' ? getWorkerForeman(p.id) : null;
               const eng = p.role === 'foreman' ? getForemanEngineer(p.id) : (p.role === 'worker' ? getWorkerEngineer(p.id) : null);
@@ -778,7 +756,7 @@ export default function PersonnelPage() {
                   <td className="px-3 py-2">
                     {isBatchable && <Checkbox checked={selectedIds.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />}
                   </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{p.seqNo || idx + 1}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{p.seqNo || pageStart + idx + 1}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.laborId || '-'}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.codeNo || '-'}</td>
                   <td className="px-3 py-2 font-medium text-xs">
@@ -826,16 +804,6 @@ export default function PersonnelPage() {
                   <td className="px-3 py-2 text-xs max-w-[120px] truncate" title={p.passportNo}>{p.passportNo || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.visaExpiryDate || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.joinDate || '-'}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground max-w-[100px] truncate" title={p.entryAffiliation}>{p.entryAffiliation || '-'}</td>
-                  <td className="px-3 py-2 text-xs">{p.exitDate || '-'}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground max-w-[80px] truncate" title={p.exitAffiliation}>{p.exitAffiliation || '-'}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground max-w-[120px] truncate" title={p.leaveRecords2025}>{p.leaveRecords2025 || '-'}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground max-w-[120px] truncate" title={p.leaveRecords2026}>{p.leaveRecords2026 || '-'}</td>
-                  <td className="px-3 py-2">
-                    <span className={`status-badge text-xs ${p.status === 'active' ? 'status-approved' : p.status === 'leave' ? 'status-pending' : 'status-resigned'}`}>
-                      {personnelStatusLabels[p.status]}
-                    </span>
-                  </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}><Edit2 size={14} /></Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(p.id)}><Trash2 size={14} className="text-destructive" /></Button>
@@ -846,6 +814,30 @@ export default function PersonnelPage() {
           </tbody>
         </table>
         {filtered.length === 0 && <div className="px-4 py-12 text-center text-muted-foreground">{messages.noMatch}</div>}
+      </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-3 text-sm text-muted-foreground">
+        <div>
+          Showing {filtered.length === 0 ? 0 : pageStart + 1}-{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length}
+        </div>
+        <div className="flex items-center gap-2">
+          <span>Rows</span>
+          <Select value={String(pageSize)} onValueChange={value => setPageSize(Number(value))}>
+            <SelectTrigger className="w-[90px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+              <SelectItem value="200">200</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="icon" className="h-9 w-9" disabled={safeCurrentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))}>
+            <ChevronLeft size={16} />
+          </Button>
+          <span className="min-w-[84px] text-center">{safeCurrentPage} / {totalPages}</span>
+          <Button variant="outline" size="icon" className="h-9 w-9" disabled={safeCurrentPage >= totalPages} onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}>
+            <ChevronRight size={16} />
+          </Button>
+        </div>
       </div>
 
       {/* Add/Edit Dialog */}
@@ -893,22 +885,6 @@ export default function PersonnelPage() {
             <div><Label>{fieldLabels.passportNo}</Label><Input value={form.passportNo} onChange={e => setForm(f => ({ ...f, passportNo: e.target.value }))} /></div>
             <div><Label>{fieldLabels.visaExpiryDate}</Label><Input placeholder="YYYY-MM-DD" value={form.visaExpiryDate} onChange={e => setForm(f => ({ ...f, visaExpiryDate: e.target.value }))} /></div>
             <div><Label>{fieldLabels.joinDate}</Label><Input placeholder="YYYY-MM-DD" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.entryAffiliation}</Label><Input value={form.entryAffiliation} onChange={e => setForm(f => ({ ...f, entryAffiliation: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.exitDate}</Label><Input placeholder="YYYY-MM-DD" value={form.exitDate} onChange={e => setForm(f => ({ ...f, exitDate: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.exitAffiliation}</Label><Input value={form.exitAffiliation} onChange={e => setForm(f => ({ ...f, exitAffiliation: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.leaveRecords2025}</Label><Input value={form.leaveRecords2025} onChange={e => setForm(f => ({ ...f, leaveRecords2025: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.leaveRecords2026}</Label><Input value={form.leaveRecords2026} onChange={e => setForm(f => ({ ...f, leaveRecords2026: e.target.value }))} /></div>
-            <div>
-              <Label>{fieldLabels.status}</Label>
-              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as PersonnelStatus }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">{personnelStatusLabels.active}</SelectItem>
-                  <SelectItem value="leave">{personnelStatusLabels.leave}</SelectItem>
-                  <SelectItem value="resigned">{personnelStatusLabels.resigned}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{actionLabels.cancel}</Button>
@@ -973,27 +949,6 @@ export default function PersonnelPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setBatchReassignOpen(false)}>{actionLabels.cancel}</Button>
             <Button onClick={handleBatchReassign}>{actionLabels.confirm}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Batch Status Dialog */}
-      <Dialog open={batchStatusOpen} onOpenChange={setBatchStatusOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>批量修改状态 Batch Update Status</DialogTitle></DialogHeader>
-          <DialogDescription className="sr-only">Batch update personnel status</DialogDescription>
-          <p className="text-sm text-muted-foreground mb-3">已选 {selectedBatchable.length} 人</p>
-          <Select value={batchTargetStatus} onValueChange={v => setBatchTargetStatus(v as PersonnelStatus)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">{personnelStatusLabels.active}</SelectItem>
-              <SelectItem value="leave">{personnelStatusLabels.leave}</SelectItem>
-              <SelectItem value="resigned">{personnelStatusLabels.resigned}</SelectItem>
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBatchStatusOpen(false)}>{actionLabels.cancel}</Button>
-            <Button onClick={handleBatchStatus}>{actionLabels.confirm}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
