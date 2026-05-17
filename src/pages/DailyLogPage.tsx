@@ -26,6 +26,10 @@ export default function DailyLogPage() {
     const fm = personnel.find(p => p.id === log.foremanId);
     return fm?.laborId || log.foremanName;
   };
+  const getWorker = (workerId: string) => personnel.find(p => p.id === workerId);
+  const getWorkerLaborId = (entry: Pick<DailyLogEntry, 'workerId' | 'workerName'>) => (
+    getWorker(entry.workerId)?.laborId || entry.workerName || '-'
+  );
 
   const foremanId = currentPersonnelId;
   const isForeman = currentRole === 'foreman';
@@ -622,7 +626,7 @@ export default function DailyLogPage() {
                         value={entry.workerId}
                         onChange={v => updateEntry(i, 'workerId', v)}
                         placeholder="选择工人 Select worker"
-                        options={teamWorkers.map(w => ({ value: w.id, label: w.name, code: w.laborId, hint: w.specialty }))}
+                        options={teamWorkers.map(w => ({ value: w.id, label: w.laborId || w.name, hint: [w.name, w.specialty].filter(Boolean).join(' / ') }))}
                       />
                     </div>
                     <div>
@@ -872,7 +876,10 @@ export default function DailyLogPage() {
                             onClick={() => toggleEntry(e.id)}
                           >
                             <ChevronRight size={14} className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                             <span className="font-medium text-sm w-16">{e.workerName}</span>
+                             <span className="w-24 min-w-0">
+                              <span className="block font-mono font-semibold text-sm truncate">{getWorkerLaborId(e)}</span>
+                              <span className="block text-xs text-muted-foreground truncate">{e.workerName}</span>
+                            </span>
                               <span className="text-sm text-muted-foreground">{formatDT(e.startTime)}–{formatDT(e.endTime)}</span>
                               <span className="text-sm text-muted-foreground">{e.hours}h</span>
                               <span className="text-sm text-muted-foreground">{e.area}</span>
@@ -881,7 +888,7 @@ export default function DailyLogPage() {
                           {isExpanded && (
                             <div className="px-4 py-3 bg-muted/20 border-t space-y-2 text-sm">
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                                  <div><span className="text-muted-foreground">工人 Worker：</span><span className="font-medium">{e.workerName}</span></div>
+                                  <div><span className="text-muted-foreground">劳工号 Labor ID：</span><span className="font-mono font-medium">{getWorkerLaborId(e)}</span></div>
                                   <div><span className="text-muted-foreground">开始时间 Start：</span><span className="font-medium">{formatDT(e.startTime)}</span></div>
                                   <div><span className="text-muted-foreground">结束时间 End：</span><span className="font-medium">{formatDT(e.endTime)}</span></div>
                                   <div><span className="text-muted-foreground">工时 Hours：</span><span className="font-medium">{e.hours}h</span></div>
@@ -971,9 +978,9 @@ export default function DailyLogPage() {
             }).map(w => (
               <label key={w.id} className="flex items-center gap-2 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <Checkbox checked={bulkPickWorkers.has(w.id)} onCheckedChange={() => setBulkPickWorkers(prev => { const n = new Set(prev); n.has(w.id) ? n.delete(w.id) : n.add(w.id); return n; })} />
-                <span className="text-sm flex items-center gap-2">
-                  {w.laborId && <span className="font-mono text-xs text-muted-foreground">{w.laborId}</span>}
-                  <span>{w.name}</span>
+                <span className="text-sm flex items-center gap-2 min-w-0">
+                  <span className="font-mono font-semibold">{w.laborId || '-'}</span>
+                  <span className="text-xs text-muted-foreground truncate">{w.name}</span>
                   <span className="text-muted-foreground text-xs">({w.specialty || '-'})</span>
                 </span>
               </label>

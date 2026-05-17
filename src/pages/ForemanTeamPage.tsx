@@ -144,8 +144,8 @@ export default function ForemanTeamPage() {
             <tbody className="divide-y">
               {teamWorkers.map(w => (
                 <tr key={w.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{w.laborId || '-'}</td>
-                  <td className="px-4 py-3 font-medium">{w.name}</td>
+                  <td className="px-4 py-3 font-mono text-sm font-semibold">{w.laborId || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{w.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{w.specialty || '-'}</td>
                   <td className="px-4 py-3 font-mono text-xs">{w.phone}</td>
                   <td className="px-4 py-3">

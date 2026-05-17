@@ -22,6 +22,10 @@ export default function ReviewPage() {
     const fm = personnel.find(p => p.id === log.foremanId);
     return fm?.laborId || log.foremanName;
   };
+  const getWorkerLabel = (workerId: string, fallbackName: string) => {
+    const worker = personnel.find(p => p.id === workerId);
+    return worker?.laborId || fallbackName;
+  };
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [comment, setComment] = useState('');
@@ -111,7 +115,7 @@ export default function ReviewPage() {
               <div key={e.id} className="rounded-md border overflow-hidden">
                 <div className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => toggleEntry(e.id)}>
                   <ChevronRight size={14} className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                  <span className="font-medium text-sm w-16">{e.workerName}</span>
+                  <span className="font-mono font-semibold text-sm w-20">{getWorkerLabel(e.workerId, e.workerName)}</span>
                   <span className="text-sm text-muted-foreground">{formatDT(e.startTime)}–{formatDT(e.endTime)}</span>
                   <span className="text-sm text-muted-foreground">{e.hours}h</span>
                   <span className="text-sm text-muted-foreground">{e.area}</span>
@@ -120,7 +124,7 @@ export default function ReviewPage() {
                 {isExpanded && (
                   <div className="px-4 py-3 bg-muted/20 border-t space-y-2 text-sm">
                     <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                      <div><span className="text-muted-foreground">{fieldLabels.worker}：</span><span className="font-medium">{e.workerName}</span></div>
+                      <div><span className="text-muted-foreground">Labor ID:</span><span className="font-mono font-medium ml-1">{getWorkerLabel(e.workerId, e.workerName)}</span></div>
                       <div><span className="text-muted-foreground">开始时间 Start：</span><span className="font-medium">{formatDT(e.startTime)}</span></div>
                       <div><span className="text-muted-foreground">结束时间 End：</span><span className="font-medium">{formatDT(e.endTime)}</span></div>
                       <div><span className="text-muted-foreground">{fieldLabels.hours}：</span><span className="font-medium">{e.hours}h</span></div>
@@ -205,7 +209,7 @@ export default function ReviewPage() {
               <div key={log.id} className="bg-card rounded-lg border border-amber-500/30 shadow-sm overflow-hidden">
                 <div className="px-5 py-4 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(log.id)}>
                   <div>
-                    <p className="font-medium"><span className="font-mono text-xs text-muted-foreground mr-1.5">{getForemanLabel(log)}</span>{log.foremanName} · {log.date}</p>
+                    <p className="font-medium"><span className="font-mono text-sm">{getForemanLabel(log)}</span> - {log.date}</p>
                     <p className="text-sm text-muted-foreground">{log.entries.length} 条工人记录 Worker Entries · {log.equipmentUsage.length} 条设备记录 Eq. Entries · 总工时 Total {log.entries.reduce((s, e) => s + e.hours, 0)}h</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -243,7 +247,7 @@ export default function ReviewPage() {
           <div key={log.id} className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="px-5 py-4 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(log.id)}>
               <div>
-                <p className="font-medium"><span className="font-mono text-xs text-muted-foreground mr-1.5">{getForemanLabel(log)}</span>{log.foremanName} · {log.date}</p>
+                <p className="font-medium"><span className="font-mono text-sm">{getForemanLabel(log)}</span> - {log.date}</p>
                 <p className="text-sm text-muted-foreground">{log.entries.length} 条工人记录 Worker Entries · {log.equipmentUsage.length} 条设备记录 Eq. Entries · 总工时 Total {log.entries.reduce((s, e) => s + e.hours, 0)}h</p>
               </div>
               <div className="flex items-center gap-2">
@@ -285,7 +289,7 @@ export default function ReviewPage() {
           <div key={log.id} className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(log.id)}>
               <div>
-                <p className="text-sm font-medium"><span className="font-mono text-xs text-muted-foreground mr-1.5">{getForemanLabel(log)}</span>{log.foremanName} · {log.date}</p>
+                <p className="text-sm font-medium"><span className="font-mono text-sm">{getForemanLabel(log)}</span> - {log.date}</p>
                 <p className="text-xs text-muted-foreground">{log.entries.length} 条记录 entries · {log.entries.reduce((s, e) => s + e.hours, 0)}h</p>
               </div>
               <div className="flex items-center gap-2">
