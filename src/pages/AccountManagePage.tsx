@@ -25,6 +25,22 @@ type FormData = {
 
 const emptyForm: FormData = { username: '', password: '', displayName: '', role: 'foreman', laborId: '', phone: '' };
 
+const normalizeText = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+
+const getNameTokens = (name?: string) => (name || '')
+  .split(/[\/\s,，]+/)
+  .map(normalizeText)
+  .filter(Boolean);
+
+const nameMatches = (left?: string, right?: string) => {
+  const leftTokens = getNameTokens(left);
+  const rightTokens = getNameTokens(right);
+  if (!leftTokens.length || !rightTokens.length) return false;
+  const leftJoined = leftTokens.join('');
+  const rightJoined = rightTokens.join('');
+  return leftJoined === rightJoined || leftTokens.every(token => rightTokens.includes(token)) || rightTokens.every(token => leftTokens.includes(token));
+};
+
 export default function AccountManagePage() {
   const { accounts, addAccount, updateAccount, deleteAccount, accountRequests, approveRequest, rejectRequest, currentUserId, currentRole } = useAppContext();
   const { personnel, teamAssignments, engineerAssignments, addPersonnel, updatePersonnel, updateTeamAssignment, setEngineerAssignmentsBatch, refreshAll } = useDataContext();
@@ -94,12 +110,35 @@ export default function AccountManagePage() {
   const [approvePhone, setApprovePhone] = useState('');
   const [linkPersonnelId, setLinkPersonnelId] = useState<string | undefined>(undefined);
 
+  const findAccountForPersonnel = useCallback((person: typeof personnel[number]) => {
+    if (person.role !== 'foreman' && person.role !== 'engineer') return undefined;
+    const laborId = normalizeText(person.laborId);
+    const phone = normalizeText(person.phone);
+    const name = person.name;
+    const nameAsUsername = getNameTokens(name).join('');
+
+    return accounts.find(account => {
+      if (!account.enabled) return false;
+      if (account.linkedPersonnelId && account.linkedPersonnelId === person.id) return true;
+      if (laborId && normalizeText(account.laborId) === laborId) return true;
+      if (phone && normalizeText(account.phone) === phone) return true;
+      if (nameMatches(account.displayName, name)) return true;
+      if (nameAsUsername && normalizeText(account.username) === nameAsUsername) return true;
+      return false;
+    });
+  }, [accounts]);
+
   const openAdd = () => { setEditingId(null); setLinkPersonnelId(undefined); setForm(emptyForm); setDialogOpen(true); };
 
   // Open add with pre-filled data from personnel
   const openAddFromPersonnel = (personnelId: string) => {
     const p = personnel.find(pp => pp.id === personnelId);
     if (!p) return;
+    const existingAccount = findAccountForPersonnel(p);
+    if (existingAccount) {
+      toast.error(`Existing account: ${existingAccount.username}`);
+      return;
+    }
     setEditingId(null);
     setLinkPersonnelId(personnelId);
     setForm({
@@ -141,12 +180,24 @@ export default function AccountManagePage() {
       const err = validateLaborId(form.laborId, form.role);
       if (err) { toast.error(err); return; }
     }
-    const duplicate = accounts.find(a => a.username === form.username && a.id !== editingId);
+    const duplicate = accounts.find(a => normalizeText(a.username) === normalizeText(form.username) && a.id !== editingId);
     if (duplicate) { toast.error('用户名已存在 Username already exists'); return; }
+    if (!editingId && linkPersonnelId) {
+      const linkedPerson = personnel.find(p => p.id === linkPersonnelId);
+      const existingAccount = linkedPerson ? findAccountForPersonnel(linkedPerson) : undefined;
+      if (existingAccount) {
+        toast.error(`Existing account: ${existingAccount.username}`);
+        return;
+      }
+    }
     // Check phone uniqueness if provided
     if (form.phone.trim()) {
-      const phoneDup = accounts.find(a => a.phone === form.phone.trim() && a.id !== editingId);
+      const phoneDup = accounts.find(a => normalizeText(a.phone) === normalizeText(form.phone) && a.id !== editingId);
       if (phoneDup) { toast.error('该手机号已关联其他账号 Phone already linked to another account'); return; }
+    }
+    if (form.laborId.trim()) {
+      const laborDup = accounts.find(a => normalizeText(a.laborId) === normalizeText(form.laborId) && a.id !== editingId);
+      if (laborDup) { toast.error(`Existing account: ${laborDup.username}`); return; }
     }
 
     if (editingId) {
@@ -218,7 +269,7 @@ export default function AccountManagePage() {
   // Find personnel without accounts (foreman/engineer only)
   const unlinkedPersonnel = personnel.filter(p =>
     (p.role === 'foreman' || p.role === 'engineer') &&
-    !accounts.some(a => a.linkedPersonnelId === p.id && a.enabled)
+    !findAccountForPersonnel(p)
   );
 
   // Only admin can access this page
