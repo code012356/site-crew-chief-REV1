@@ -1,0 +1,1 @@
+ALTER TABLE public.accounts ADD COLUMN IF NOT EXISTS last_active_at timestamp with time zone DEFAULT NULL;

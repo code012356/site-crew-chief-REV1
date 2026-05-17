@@ -1,0 +1,1 @@
+ALTER TABLE public.equipment_requests ADD COLUMN IF NOT EXISTS engineer_comment text;

@@ -1,0 +1,1 @@
+ALTER TABLE public.accounts ADD COLUMN phone text DEFAULT '' NOT NULL;

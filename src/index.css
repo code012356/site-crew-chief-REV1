@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 96%;
+    --foreground: 215 30% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 30% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 30% 15%;
+
+    --primary: 215 50% 23%;
+    --primary-foreground: 40 100% 97%;
+
+    --secondary: 210 15% 90%;
+    --secondary-foreground: 215 30% 20%;
+
+    --muted: 210 15% 93%;
+    --muted-foreground: 215 10% 50%;
+
+    --accent: 38 92% 50%;
+    --accent-foreground: 215 50% 12%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 215 50% 12%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 215 50% 23%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 215 50% 18%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 38 92% 50%;
+    --sidebar-primary-foreground: 215 50% 12%;
+    --sidebar-accent: 215 45% 25%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 40% 25%;
+    --sidebar-ring: 38 92% 50%;
+    --sidebar-muted: 215 30% 35%;
+
+    --chart-1: 38 92% 50%;
+    --chart-2: 199 89% 48%;
+    --chart-3: 142 71% 40%;
+    --chart-4: 0 72% 51%;
+    --chart-5: 262 60% 55%;
+
+    --font-display: 'Inter', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .stat-card {
+    @apply bg-card rounded-lg border p-4 md:p-5 shadow-sm transition-all duration-200 hover:shadow-md;
+  }
+
+  .page-header {
+    @apply mb-4 md:mb-6;
+  }
+
+  .page-title {
+    @apply text-xl md:text-2xl font-bold text-foreground;
+  }
+
+  .page-subtitle {
+    @apply text-xs md:text-sm text-muted-foreground mt-1;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-active {
+    @apply bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))];
+  }
+
+  .status-leave {
+    @apply bg-[hsl(var(--warning)/0.1)] text-[hsl(var(--warning))];
+  }
+
+  .status-resigned {
+    @apply bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))];
+  }
+
+  .status-pending {
+    @apply bg-[hsl(var(--info)/0.1)] text-[hsl(var(--info))];
+  }
+
+  .status-approved {
+    @apply bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))];
+  }
+
+  .status-rejected {
+    @apply bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))];
+  }
+
+  /* Mobile-friendly table wrapper */
+  .table-responsive {
+    @apply overflow-x-auto -mx-4 md:mx-0;
+  }
+
+  .table-responsive table {
+    @apply min-w-[640px];
+  }
+}

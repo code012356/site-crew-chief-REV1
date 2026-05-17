@@ -1,0 +1,1 @@
+ALTER TABLE public.equipment_requests ADD COLUMN request_type TEXT NOT NULL DEFAULT 'existing';
