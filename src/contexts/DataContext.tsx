@@ -367,9 +367,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
       seq_no: p.seqNo || null,
     }));
+    const rowsWithoutLeaveFields = rows.map(({ leave_date, leave_count, ...row }) => row);
     const inserted: any[] = [];
     for (const part of chunkArray(rows, MUTATION_CHUNK_SIZE)) {
-      const { data, error } = await supabase.from('personnel').insert(part).select('id');
+      let { data, error } = await supabase.from('personnel').insert(part).select('id');
+      if (error && /leave_(date|count).*schema cache/i.test(error.message || '')) {
+        const start = inserted.length;
+        const fallbackPart = rowsWithoutLeaveFields.slice(start, start + part.length);
+        const fallback = await supabase.from('personnel').insert(fallbackPart).select('id');
+        data = fallback.data;
+        error = fallback.error;
+      }
       assertSupabaseOk(error, 'Batch add personnel');
       inserted.push(...(data || []));
     }
