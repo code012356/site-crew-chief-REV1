@@ -101,6 +101,8 @@ export const fieldLabels = {
   assignedTo: '所属工长 Assigned To',
   workLine: '一线/二线 Site/Indirect',
   actualWork: '现场实际工作 Actual Work',
+  leaveDate: '休假日期 Leave Date',
+  leaveCount: '休假次数 Leave Count',
   seqNo: '序列 No.',
   actions: '操作 Actions',
   equipmentNo: '设备编号 Equipment No.',

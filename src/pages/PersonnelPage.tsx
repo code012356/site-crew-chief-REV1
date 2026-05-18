@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { pageTitles, fieldLabels, actionLabels, filterLabels, roleLabels, messages } from '@/lib/i18n';
+import { pageTitles, fieldLabels, actionLabels, filterLabels, roleLabels, personnelStatusLabels, messages } from '@/lib/i18n';
 
 type UndoAction = {
   type: 'add' | 'update' | 'delete' | 'batch_add';
@@ -51,8 +51,9 @@ export default function PersonnelPage() {
   const [form, setForm] = useState({
     name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '',
     role: 'worker' as Personnel['role'], phone: '',
+    status: 'active' as Personnel['status'],
     specialty: '', nationality: '', joinDate: '',
-    projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: '' as string,
+    projectDept: '', assignedTo: '', workLine: '', leaveDate: '', leaveCount: '', seqNo: '' as string,
   });
 
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -268,17 +269,17 @@ export default function PersonnelPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '', role: 'worker', phone: '', specialty: '', nationality: '', joinDate: '', projectDept: '', assignedTo: '', workLine: '', actualWork: '', seqNo: String(getNextSeqNo()) });
+    setForm({ name: '', laborId: '', codeNo: '', passportNo: '', visaExpiryDate: '', role: 'worker', phone: '', status: 'active', specialty: '', nationality: '', joinDate: '', projectDept: '', assignedTo: '', workLine: '', leaveDate: '', leaveCount: '', seqNo: String(getNextSeqNo()) });
     setDialogOpen(true);
   };
   const openEdit = (p: Personnel) => {
     setEditing(p);
     setForm({
       name: p.name, laborId: p.laborId || '', codeNo: p.codeNo || '', passportNo: p.passportNo || '',
-      visaExpiryDate: p.visaExpiryDate || '', role: p.role, phone: p.phone,
+      visaExpiryDate: p.visaExpiryDate || '', role: p.role, phone: p.phone, status: p.status,
       specialty: p.specialty || '', nationality: p.nationality || '', joinDate: p.joinDate,
       projectDept: p.projectDept || '', assignedTo: p.assignedTo || '', workLine: p.workLine || '',
-      actualWork: p.actualWork || '', seqNo: p.seqNo?.toString() || '',
+      leaveDate: p.leaveDate || '', leaveCount: p.leaveCount?.toString() || '', seqNo: p.seqNo?.toString() || '',
     });
     setDialogOpen(true);
   };
@@ -331,11 +332,12 @@ export default function PersonnelPage() {
       specialty: form.specialty || undefined,
       nationality: form.nationality || undefined,
       joinDate: form.joinDate || new Date().toISOString().split('T')[0],
-      status: editing?.status || 'active' as const,
+      status: form.status,
       projectDept: form.projectDept || undefined,
       assignedTo: form.assignedTo || undefined,
       workLine: form.workLine || undefined,
-      actualWork: form.actualWork || undefined,
+      leaveDate: form.leaveDate || undefined,
+      leaveCount: form.leaveCount ? parseInt(form.leaveCount, 10) || 0 : 0,
       seqNo: editing ? (form.seqNo ? parseInt(form.seqNo) || undefined : undefined) : (parseInt(form.seqNo, 10) || getNextSeqNo()),
     };
     try {
@@ -737,13 +739,15 @@ export default function PersonnelPage() {
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.codeNo}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.name}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.role}</th>
+              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.status}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.specialty}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.nationality}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.projectDept}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">所属工长 Foreman</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">所属工程师 Engineer</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.workLine}</th>
-              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.actualWork}</th>
+              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.leaveDate}</th>
+              <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.leaveCount}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.passportNo}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.visaExpiryDate}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.joinDate}</th>
@@ -783,6 +787,7 @@ export default function PersonnelPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-xs">{roleLabels[p.role as keyof typeof roleLabels]}</td>
+                  <td className="px-3 py-2 text-xs">{p.status === 'active' ? '在班 Active' : p.status === 'leave' ? '休假 On Leave' : '离职 Resigned'}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{p.specialty || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.nationality || '-'}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground max-w-[100px] truncate" title={p.projectDept}>{p.projectDept || '-'}</td>
@@ -805,7 +810,8 @@ export default function PersonnelPage() {
                     ) : '-'}
                   </td>
                   <td className="px-3 py-2 text-xs">{p.workLine || '-'}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground max-w-[100px] truncate" title={p.actualWork}>{p.actualWork || '-'}</td>
+                  <td className="px-3 py-2 text-xs">{p.leaveDate || '-'}</td>
+                  <td className="px-3 py-2 text-xs">{p.leaveCount ?? 0}</td>
                   <td className="px-3 py-2 text-xs max-w-[120px] truncate" title={p.passportNo}>{p.passportNo || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.visaExpiryDate || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.joinDate || '-'}</td>
@@ -866,6 +872,17 @@ export default function PersonnelPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>{fieldLabels.status}</Label>
+              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as Personnel['status'] }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">{personnelStatusLabels.active}</SelectItem>
+                  <SelectItem value="leave">{personnelStatusLabels.leave}</SelectItem>
+                  <SelectItem value="resigned">{personnelStatusLabels.resigned}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>{fieldLabels.specialty}</Label><Input placeholder="e.g. Carpenter, Electrician" value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))} /></div>
             <div><Label>{fieldLabels.nationality}</Label><Input placeholder="e.g. India, Bangladesh" value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))} /></div>
             <div><Label>{fieldLabels.phone}</Label><Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
@@ -886,7 +903,8 @@ export default function PersonnelPage() {
               <p className="text-[11px] text-muted-foreground mt-1">用于自动匹配工长 Used to auto-link to a foreman on import</p>
             </div>
             <div><Label>{fieldLabels.workLine}</Label><Input placeholder="e.g. site / Indirect" value={form.workLine} onChange={e => setForm(f => ({ ...f, workLine: e.target.value }))} /></div>
-            <div><Label>{fieldLabels.actualWork}</Label><Input placeholder="e.g. Carpenter" value={form.actualWork} onChange={e => setForm(f => ({ ...f, actualWork: e.target.value }))} /></div>
+            <div><Label>{fieldLabels.leaveDate}</Label><Input placeholder="YYYY-MM-DD or date range" value={form.leaveDate} onChange={e => setForm(f => ({ ...f, leaveDate: e.target.value }))} /></div>
+            <div><Label>{fieldLabels.leaveCount}</Label><Input type="number" min={0} placeholder="0" value={form.leaveCount} onChange={e => setForm(f => ({ ...f, leaveCount: e.target.value }))} /></div>
             <div><Label>{fieldLabels.passportNo}</Label><Input value={form.passportNo} onChange={e => setForm(f => ({ ...f, passportNo: e.target.value }))} /></div>
             <div><Label>{fieldLabels.visaExpiryDate}</Label><Input placeholder="YYYY-MM-DD" value={form.visaExpiryDate} onChange={e => setForm(f => ({ ...f, visaExpiryDate: e.target.value }))} /></div>
             <div><Label>{fieldLabels.joinDate}</Label><Input placeholder="YYYY-MM-DD" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} /></div>
@@ -1008,12 +1026,12 @@ export default function PersonnelPage() {
                   <tr><td className="px-3 py-1.5 font-mono text-xs">所属项目/部门</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Structure Team...</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">所属工长</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Foreman/Officer</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">一线/二线</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">site / Indirect</td></tr>
-                  <tr><td className="px-3 py-1.5 font-mono text-xs">现场实际工作</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Actual work on site</td></tr>
+                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假日期</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Leave date or date range</td></tr>
+                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假次数</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Leave count</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">护照号码/Passport</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">护照号码</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">签证有效期/Visa</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">YYYYMMDD</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">入场日期</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">YYYY.MM.DD</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">归属(入/退)</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">来源/去向</td></tr>
-                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假记录</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">日期区间</td></tr>
                 </tbody>
               </table>
             </div>

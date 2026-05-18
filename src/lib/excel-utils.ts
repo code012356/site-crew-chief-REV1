@@ -67,7 +67,8 @@ const personnelHeaders = [
   '所属项目/部门 Project/Dept.',
   '所属工长 Assigned To',
   '一线/二线 Site/Indirect',
-  '现场实际工作 Actual Work',
+  '休假日期 Leave Date',
+  '休假次数 Leave Count',
   '入场日期 Entry Date',
   '电话 Phone',
 ];
@@ -106,7 +107,8 @@ export function exportPersonnel(data: Personnel[]) {
     '所属项目/部门 Project/Dept.': p.projectDept || '',
     '所属工长 Assigned To': p.assignedTo || '',
     '一线/二线 Site/Indirect': p.workLine || '',
-    '现场实际工作 Actual Work': p.actualWork || '',
+    '休假日期 Leave Date': p.leaveDate || '',
+    '休假次数 Leave Count': p.leaveCount ?? 0,
     '入场日期 Entry Date': p.joinDate,
     '电话 Phone': p.phone,
   }));
@@ -146,7 +148,11 @@ export function importPersonnel(file: File): Promise<Personnel[]> {
             projectDept: getByHeader(row, ['Project/Dept', 'Project', '所属项目', '部门']) || undefined,
             assignedTo: getByHeader(row, ['Assigned To', 'Foreman', 'Engineer', 'Officer', '所属工长']) || undefined,
             workLine: getByHeader(row, ['Site/Indirect', '一线', '二线']) || undefined,
-            actualWork: getByHeader(row, ['Actual Work', 'Actual work', '现场实际工作']) || undefined,
+            leaveDate: getByHeader(row, ['Leave Date', 'Leave date', '休假日期', '休假记录']) || undefined,
+            leaveCount: (() => {
+              const raw = getByHeader(row, ['Leave Count', 'Leave count', '休假次数']);
+              return raw ? parseInt(raw, 10) || 0 : 0;
+            })(),
             seqNo: seqRaw ? parseInt(seqRaw, 10) || undefined : undefined,
           };
         }).filter(p => p.name);

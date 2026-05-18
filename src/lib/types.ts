@@ -21,6 +21,8 @@ export interface Personnel {
   assignedTo?: string;
   workLine?: string;
   actualWork?: string;
+  leaveDate?: string;
+  leaveCount?: number;
   seqNo?: number;
 }
 

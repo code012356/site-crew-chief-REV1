@@ -138,6 +138,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         assignedTo: r.assigned_to || undefined,
         workLine: r.work_line || undefined,
         actualWork: r.actual_work || undefined,
+        leaveDate: r.leave_date || undefined,
+        leaveCount: r.leave_count ?? undefined,
         seqNo: r.seq_no || undefined,
       })));
     }
@@ -267,6 +269,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nationality: p.nationality || null, join_date: p.joinDate,
       project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
       work_line: p.workLine || null, actual_work: p.actualWork || null,
+      leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
       seq_no: p.seqNo || null,
     }).select('id').single();
     assertSupabaseOk(error, 'Add personnel');
@@ -291,6 +294,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.assignedTo !== undefined) db.assigned_to = updates.assignedTo || null;
     if (updates.workLine !== undefined) db.work_line = updates.workLine || null;
     if (updates.actualWork !== undefined) db.actual_work = updates.actualWork || null;
+    if (updates.leaveDate !== undefined) db.leave_date = updates.leaveDate || null;
+    if (updates.leaveCount !== undefined) db.leave_count = updates.leaveCount || 0;
     if (updates.seqNo !== undefined) db.seq_no = updates.seqNo || null;
     const { error } = await supabase.from('personnel').update(db).eq('id', id);
     assertSupabaseOk(error, 'Update personnel');
@@ -359,6 +364,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       nationality: p.nationality || null, join_date: p.joinDate,
       project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
       work_line: p.workLine || null, actual_work: p.actualWork || null,
+      leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
       seq_no: p.seqNo || null,
     }));
     const inserted: any[] = [];
