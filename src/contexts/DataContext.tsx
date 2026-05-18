@@ -27,7 +27,7 @@ interface DataContextType {
   updateWorkCode: (id: string, updates: Partial<Omit<WorkCode, 'id'>>) => Promise<void>;
   deleteWorkCode: (id: string) => Promise<void>;
   // Equipment CRUD
-  addEquipment: (eq: Omit<Equipment, 'id'>) => Promise<void>;
+  addEquipment: (eq: Omit<Equipment, 'id'>) => Promise<string>;
   updateEquipment: (id: string, updates: Partial<Omit<Equipment, 'id'>>) => Promise<void>;
   deleteEquipment: (id: string) => Promise<void>;
   // Team assignment CRUD
@@ -394,13 +394,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // ── Equipment CRUD ──
-  const addEquipment = async (eq: Omit<Equipment, 'id'>) => {
-    const { error } = await supabase.from('equipment').insert({
+  const addEquipment = async (eq: Omit<Equipment, 'id'>): Promise<string> => {
+    const { data, error } = await supabase.from('equipment').insert({
       equipment_no: eq.equipmentNo || null, name: eq.name, model: eq.model,
       status: eq.status, location: eq.location || null,
-    });
+    }).select('id').single();
     assertSupabaseOk(error, 'Add equipment');
     await fetchEquipment();
+    return data?.id || '';
   };
   const updateEquipment = async (id: string, updates: Partial<Omit<Equipment, 'id'>>) => {
     const db: any = {};
@@ -422,7 +423,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   // ── Team assignment CRUD ──
   const updateTeamAssignment = async (foremanId: string, workerIds: string[], equipmentIds: string[]) => {
     const { error } = await supabase.from('team_assignments').upsert({
-      foreman_id: foremanId, worker_ids: workerIds, equipment_ids: equipmentIds,
+      foreman_id: foremanId, worker_ids: [...new Set(workerIds)], equipment_ids: [...new Set(equipmentIds)],
     }, { onConflict: 'foreman_id' });
     assertSupabaseOk(error, 'Update team assignment');
     await fetchTeamAssignments();
@@ -430,7 +431,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addWorkerToTeam = async (foremanId: string, workerId: string) => {
     const a = teamAssignments.find(t => t.foremanId === foremanId);
-    const workerIds = [...(a?.workerIds || []), workerId];
+    const workerIds = [...new Set([...(a?.workerIds || []), workerId])];
     await updateTeamAssignment(foremanId, workerIds, a?.equipmentIds || []);
   };
 
@@ -441,9 +442,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addEquipmentToTeam = async (foremanId: string, equipmentId: string) => {
-    const a = teamAssignments.find(t => t.foremanId === foremanId);
-    const equipmentIds = [...(a?.equipmentIds || []), equipmentId];
-    await updateTeamAssignment(foremanId, a?.workerIds || [], equipmentIds);
+    const normalized = teamAssignments.map(a => ({
+      ...a,
+      workerIds: [...new Set(a.workerIds)],
+      equipmentIds: [...new Set(a.equipmentIds.filter(id => id !== equipmentId))],
+    }));
+    const target = normalized.find(t => t.foremanId === foremanId);
+    if (target) {
+      target.equipmentIds = [...new Set([...target.equipmentIds, equipmentId])];
+    } else {
+      normalized.push({ foremanId, workerIds: [], equipmentIds: [equipmentId] });
+    }
+    await setTeamAssignmentsBatch(normalized);
   };
 
   const removeEquipmentFromTeam = async (foremanId: string, equipmentId: string) => {

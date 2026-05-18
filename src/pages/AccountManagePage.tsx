@@ -250,14 +250,7 @@ export default function AccountManagePage() {
       if (approvePhone) {
         await updatePersonnel(linkedPersonnelId, { phone: approvePhone });
       }
-      await approveRequest(approveTargetId, approvePassword, linkedPersonnelId);
-      // Update the new account with phone
-      if (approvePhone) {
-        const newAccount = accounts.find(a => a.linkedPersonnelId === linkedPersonnelId);
-        if (newAccount) {
-          await updateAccount(newAccount.id, { phone: approvePhone });
-        }
-      }
+      await approveRequest(approveTargetId, approvePassword, linkedPersonnelId, approvePhone || undefined);
       toast.success('申请已通过，人员记录已初始化 Approved and personnel initialized');
       setApproveDialogOpen(false);
       await refreshAll();

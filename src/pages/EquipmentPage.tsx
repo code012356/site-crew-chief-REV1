@@ -107,13 +107,13 @@ export default function EquipmentPage() {
         }
       }
       if (form.assignedForeman && form.assignedForeman !== 'none') {
-        const a = teamAssignments.find(t => t.foremanId === form.assignedForeman);
-        if (a) {
-          await updateTeamAssignment(form.assignedForeman, a.workerIds, [...a.equipmentIds.filter(id => id !== editing.id), editing.id]);
-        }
+        await addEquipmentToTeam(form.assignedForeman, editing.id);
       }
     } else {
-      await dbAddEquipment({ name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
+      const newEquipmentId = await dbAddEquipment({ name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
+      if (form.assignedForeman && form.assignedForeman !== 'none') {
+        await addEquipmentToTeam(form.assignedForeman, newEquipmentId);
+      }
     }
     toast.success(messages.saved);
     setDialogOpen(false);
@@ -265,25 +265,31 @@ export default function EquipmentPage() {
 
   const handleAdminApproveRequest = async () => {
     if (!selectedRequest) return;
-    
+
+    let approvedEquipmentId = selectedRequest.equipmentId;
     if (selectedRequest.requestType === 'new') {
       if (!newEqForm.name.trim()) { toast.error(messages.fillComplete); return; }
-      await dbAddEquipment({ name: newEqForm.name, equipmentNo: newEqForm.equipmentNo || undefined, model: newEqForm.model, status: 'available', location: newEqForm.location });
-    } else if (selectedRequest.equipmentId) {
+      approvedEquipmentId = await dbAddEquipment({ name: newEqForm.name, equipmentNo: newEqForm.equipmentNo || undefined, model: newEqForm.model, status: 'available', location: newEqForm.location });
+    }
+
+    if (approvedEquipmentId) {
       // Auto-assign equipment to the requester
       if (selectedRequest.requesterRole === 'foreman') {
         // Assign directly to the requesting foreman
-        await addEquipmentToTeam(selectedRequest.requesterId, selectedRequest.equipmentId);
+        await addEquipmentToTeam(selectedRequest.requesterId, approvedEquipmentId);
       } else if (selectedRequest.requesterRole === 'engineer') {
         // Engineer requested: assign to the selected foreman if specified
-        if (assignForeman && assignForeman !== 'none') {
-          await addEquipmentToTeam(assignForeman, selectedRequest.equipmentId);
+        if (!assignForeman || assignForeman === 'none') {
+          toast.error('请选择要分配的工长 Please choose a foreman to assign');
+          return;
         }
+        await addEquipmentToTeam(assignForeman, approvedEquipmentId);
       }
     }
 
     await updateEquipmentRequest(selectedRequestId, {
       status: 'approved',
+      equipmentId: approvedEquipmentId,
       adminComment: adminComment || undefined,
       resolvedAt: new Date().toISOString(),
     });

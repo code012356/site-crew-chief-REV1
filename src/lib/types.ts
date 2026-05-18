@@ -38,6 +38,7 @@ export interface LogRevision {
   entries: DailyLogEntry[];
   equipmentUsage: EquipmentUsageEntry[];
   reviewComment?: string;
+  previousStatus?: LogStatus;
 }
 
 export interface DailyLog {

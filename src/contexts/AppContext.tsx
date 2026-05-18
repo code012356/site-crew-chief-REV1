@@ -41,7 +41,7 @@ interface AppContextType {
   changePassword: (oldPassword: string, newPassword: string) => Promise<boolean>;
   accountRequests: AccountRequest[];
   submitAccountRequest: (req: Omit<AccountRequest, 'id' | 'createdAt'>) => Promise<boolean>;
-  approveRequest: (id: string, password: string, linkedPersonnelId: string) => Promise<void>;
+  approveRequest: (id: string, password: string, linkedPersonnelId: string, phone?: string) => Promise<void>;
   rejectRequest: (id: string) => Promise<void>;
   refreshAccounts: () => Promise<void>;
 }
@@ -252,12 +252,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return true;
   };
 
-  const approveRequest = async (id: string, password: string, linkedPersonnelId: string) => {
+  const approveRequest = async (id: string, password: string, linkedPersonnelId: string, phone?: string) => {
     const req = accountRequests.find(r => r.id === id);
     if (req) {
       await addAccount({
         username: req.username, password, displayName: req.displayName,
-        role: req.role, enabled: true, laborId: req.laborId, linkedPersonnelId,
+        role: req.role, enabled: true, laborId: req.laborId, linkedPersonnelId, phone,
       });
       await supabase.from('account_requests').delete().eq('id', id);
       await fetchRequests();

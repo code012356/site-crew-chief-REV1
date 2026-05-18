@@ -20,7 +20,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 
 export default function DailyLogPage() {
   const { currentRole, currentPersonnelId, currentUserName } = useAppContext();
-  const { personnel, equipment, workCodes, engineerAssignments, getTeamWorkers, getEngineerForemen, dailyLogs, addDailyLog, updateDailyLog, softDeleteDailyLog, restoreDailyLog, deleteDailyLog, emptyTrash } = useDataContext();
+  const { personnel, workCodes, engineerAssignments, getTeamWorkers, getTeamEquipment, getEngineerForemen, dailyLogs, addDailyLog, updateDailyLog, softDeleteDailyLog, restoreDailyLog, deleteDailyLog, emptyTrash } = useDataContext();
 
   const getForemanLabel = (log: DailyLog) => {
     const fm = personnel.find(p => p.id === log.foremanId);
@@ -36,7 +36,7 @@ export default function DailyLogPage() {
   const isAdmin = currentRole === 'admin';
 
   const teamWorkers = isForeman ? getTeamWorkers(foremanId).filter(w => w.status === 'active') : [];
-  const teamEquip = isForeman ? equipment.filter(e => e.status !== 'retired') : [];
+  const teamEquip = isForeman ? getTeamEquipment(foremanId).filter(e => e.status !== 'retired') : [];
 
   // Foreman must have an assigned engineer before log operations
   const assignedEngineer = isForeman
@@ -208,13 +208,14 @@ export default function DailyLogPage() {
   };
 
   const defaultStart = () => {
-    const d = new Date().toISOString().split('T')[0];
+    const d = format(new Date(), 'yyyy-MM-dd');
     return `${d}T07:00`;
   };
   const defaultEnd = () => {
-    const d = new Date().toISOString().split('T')[0];
+    const d = format(new Date(), 'yyyy-MM-dd');
     return `${d}T15:00`;
   };
+  const todayLocal = () => format(new Date(), 'yyyy-MM-dd');
 
   const addWorkerEntry = () => setEntries(prev => [...prev, { workerId: '', workerName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', workCodeId: '', workCodeName: '', detail: '' }]);
   const addEqEntry = () => setEqEntries(prev => [...prev, { equipmentId: '', equipmentName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', workCodeId: '', workCodeName: '', detail: '' }]);
@@ -292,6 +293,7 @@ export default function DailyLogPage() {
       timestamp: new Date().toISOString(),
       entries: log.entries,
       equipmentUsage: log.equipmentUsage,
+      previousStatus: log.status,
       reviewComment: `[撤回申请 Withdraw Request] 原状态 Previous: ${statusLabel(log.status)}`,
     };
     await updateDailyLog(logId, {
@@ -322,6 +324,8 @@ export default function DailyLogPage() {
     if (entries.length === 0) { toast.error('请至少添加一条工人记录 Please add at least one entry'); return; }
     if (entries.some(e => !e.workerId || !e.area || !e.workCodeId)) { toast.error('请填写完整工人信息 Please fill in all required fields'); return; }
 
+    if (eqEntries.some(e => !e.equipmentId || !e.area || !e.workCodeId)) { toast.error('Please fill in all required equipment fields'); return; }
+
     const newEntries: DailyLogEntry[] = entries.map((e, i) => ({ ...e, id: `e_${Date.now()}_${i}` }));
     const newEqEntries: EquipmentUsageEntry[] = eqEntries.map((e, i) => ({ ...e, id: `eu_${Date.now()}_${i}` }));
 
@@ -332,6 +336,7 @@ export default function DailyLogPage() {
           timestamp: new Date().toISOString(),
           entries: log.entries,
           equipmentUsage: log.equipmentUsage,
+          previousStatus: log.status,
           reviewComment: log.reviewComment,
         };
         await updateDailyLog(editingLogId, {
@@ -346,7 +351,7 @@ export default function DailyLogPage() {
     } else {
       const fmPersonnel = personnel.find(p => p.id === foremanId);
       await addDailyLog({
-        date: new Date().toISOString().split('T')[0],
+        date: todayLocal(),
         foremanId,
         foremanName: fmPersonnel?.name || currentUserName,
         status: 'pending',
@@ -598,7 +603,7 @@ export default function DailyLogPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-lg">
-                {editingLogId ? '修改施工日志 Revise Log' : '今日施工日志 Today\'s Log'} · {editingLogId ? logs.find(l => l.id === editingLogId)?.date : new Date().toISOString().split('T')[0]}
+                {editingLogId ? '修改施工日志 Revise Log' : '今日施工日志 Today\'s Log'} · {editingLogId ? logs.find(l => l.id === editingLogId)?.date : todayLocal()}
               </h2>
               {editingLogId && (
                 <p className="text-sm text-muted-foreground mt-1">修改后将重新提交审核 Will be resubmitted after revision</p>
