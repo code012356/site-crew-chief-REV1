@@ -85,6 +85,7 @@ export default function PersonnelPage() {
   const [importCandidates, setImportCandidates] = useState<ImportCandidate[]>([]);
   const [importSelectAll, setImportSelectAll] = useState(true);
   const [importSelected, setImportSelected] = useState<Set<number>>(new Set());
+  const [importSubmitting, setImportSubmitting] = useState(false);
 
   const foremen = useMemo(() => personnel.filter(p => p.role === 'foreman' && p.status !== 'resigned'), [personnel]);
   const engineers = useMemo(() => personnel.filter(p => p.role === 'engineer' && p.status !== 'resigned'), [personnel]);
@@ -526,10 +527,13 @@ export default function PersonnelPage() {
   };
 
   const handleConfirmImport = async () => {
+    if (importSubmitting) return;
     const toImport = importCandidates.filter((_, i) => importSelected.has(i));
     if (toImport.length === 0) { toast.error('未选择任何数据 No data selected'); return; }
+    setImportSubmitting(true);
+    try {
     const addedIds = await batchAddPersonnel(toImport.map(c => c.data));
-    pushUndo({ type: 'batch_add', ids: addedIds, description: `导入 ${addedIds.length} 人` });
+    pushUndo({ type: 'batch_add', ids: addedIds, description: `Import ${addedIds.length} personnel` });
 
     // Auto-link imported workers to foremen by matching assignedTo text
     // against foreman laborId or name parts. Includes BOTH existing foremen
@@ -581,6 +585,12 @@ export default function PersonnelPage() {
     toast.success(`成功导入 ${addedIds.length} 人，自动关联工长 ${linkCount} 人 Imported, ${linkCount} auto-linked`);
     setImportPreviewOpen(false);
     setImportCandidates([]);
+    setImportSelected(new Set());
+    } catch (err) {
+      toast.error(`Import failed: ${getErrorMessage(err)}`);
+    } finally {
+      setImportSubmitting(false);
+    }
   };
 
   const handleDownloadTemplate = () => {
@@ -1120,8 +1130,8 @@ export default function PersonnelPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setImportPreviewOpen(false)}>取消 Cancel</Button>
-            <Button onClick={handleConfirmImport} disabled={importSelected.size === 0}>
-              确认导入 Import ({importSelected.size})
+            <Button onClick={handleConfirmImport} disabled={importSelected.size === 0 || importSubmitting}>
+              {importSubmitting ? '导入中 Importing...' : `确认导入 Import (${importSelected.size})`}
             </Button>
           </DialogFooter>
         </DialogContent>
