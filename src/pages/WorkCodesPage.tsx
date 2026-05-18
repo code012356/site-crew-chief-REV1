@@ -15,25 +15,26 @@ type WorkCodeForm = {
   code: string;
   name: string;
   category: string;
-  area: string;
 };
 
-const emptyForm: WorkCodeForm = { code: '', name: '', category: '', area: '' };
+const emptyForm: WorkCodeForm = { code: '', name: '', category: '' };
 
 export default function WorkCodesPage() {
-  const { workCodes, addWorkCode, updateWorkCode, deleteWorkCode } = useDataContext();
+  const { workCodes, workAreas, addWorkCode, updateWorkCode, deleteWorkCode, addWorkArea, updateWorkArea, deleteWorkArea } = useDataContext();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WorkCode | null>(null);
   const [form, setForm] = useState<WorkCodeForm>(emptyForm);
+  const [areaInput, setAreaInput] = useState('');
+  const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = Array.from(new Set(workCodes.map(wc => wc.category).filter(Boolean))).sort();
 
   const filtered = workCodes.filter(wc => {
     const q = search.trim().toLowerCase();
-    const hay = `${wc.code} ${wc.name} ${wc.category} ${wc.area || ''}`.toLowerCase();
+    const hay = `${wc.code} ${wc.name} ${wc.category}`.toLowerCase();
     if (q && !hay.includes(q)) return false;
     if (filterCat !== 'all' && wc.category !== filterCat) return false;
     return true;
@@ -47,7 +48,7 @@ export default function WorkCodesPage() {
 
   const openEdit = (wc: WorkCode) => {
     setEditing(wc);
-    setForm({ code: wc.code, name: wc.name, category: wc.category, area: wc.area || '' });
+    setForm({ code: wc.code, name: wc.name, category: wc.category });
     setDialogOpen(true);
   };
 
@@ -56,7 +57,6 @@ export default function WorkCodesPage() {
       code: form.code.trim(),
       name: form.name.trim(),
       category: form.category.trim(),
-      area: form.area.trim() || undefined,
     };
     if (!payload.code || !payload.name || !payload.category) {
       toast.error(messages.fillComplete);
@@ -90,7 +90,7 @@ export default function WorkCodesPage() {
       imported.forEach(wc => rowsByCode.set(wc.code, wc));
       for (const wc of rowsByCode.values()) {
         const existing = workCodes.find(w => w.code === wc.code);
-        const payload = { name: wc.name, category: wc.category, area: wc.area };
+        const payload = { name: wc.name, category: wc.category };
         if (existing) {
           await updateWorkCode(existing.id, payload);
         } else {
@@ -103,6 +103,32 @@ export default function WorkCodesPage() {
       toast.error(error instanceof Error ? error.message : messages.importFailed);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleAreaSave = async () => {
+    const name = areaInput.trim();
+    if (!name) {
+      toast.error('Please enter Area');
+      return;
+    }
+    if (workAreas.some(a => a.name.toLowerCase() === name.toLowerCase() && a.id !== editingAreaId)) {
+      toast.error('Area already exists');
+      return;
+    }
+    if (editingAreaId) {
+      await updateWorkArea(editingAreaId, name);
+      toast.success(messages.saved);
+    } else {
+      await addWorkArea(name);
+      toast.success(messages.saved);
+    }
+    setAreaInput('');
+    setEditingAreaId(null);
+  };
+
+  const startEditArea = (id: string, name: string) => {
+    setEditingAreaId(id);
+    setAreaInput(name);
   };
 
   return (
@@ -141,7 +167,6 @@ export default function WorkCodesPage() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.code}</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.name}</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.category}</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">施工区域 Area</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">{fieldLabels.actions}</th>
             </tr>
           </thead>
@@ -151,7 +176,6 @@ export default function WorkCodesPage() {
                 <td className="px-4 py-3 font-mono text-xs font-semibold">{wc.code}</td>
                 <td className="px-4 py-3 font-medium">{wc.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{wc.category}</td>
-                <td className="px-4 py-3 text-muted-foreground">{wc.area || '-'}</td>
                 <td className="px-4 py-3 text-right">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(wc)}><Edit2 size={15} /></Button>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(wc.id)}><Trash2 size={15} className="text-destructive" /></Button>
@@ -161,6 +185,45 @@ export default function WorkCodesPage() {
           </tbody>
         </table>
         {filtered.length === 0 && <div className="px-4 py-12 text-center text-muted-foreground">{messages.noMatch}</div>}
+      </div>
+
+      <div className="bg-card rounded-lg border shadow-sm overflow-hidden mt-6">
+        <div className="px-4 py-3 border-b bg-muted/30 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">施工区域 Area 管理</h2>
+            <p className="text-sm text-muted-foreground">管理员维护一级 Area；工长填写日志时再输入二级具体位置。</p>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={areaInput}
+              onChange={e => setAreaInput(e.target.value)}
+              placeholder="e.g. Area A / A区"
+              className="w-[240px]"
+            />
+            <Button onClick={handleAreaSave} className="gap-1">
+              <Plus size={15} /> {editingAreaId ? actionLabels.save : actionLabels.add}
+            </Button>
+            {editingAreaId && (
+              <Button variant="outline" onClick={() => { setEditingAreaId(null); setAreaInput(''); }}>
+                {actionLabels.cancel}
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="divide-y">
+          {workAreas.map(area => (
+            <div key={area.id} className="px-4 py-3 flex items-center justify-between">
+              <span className="font-medium">{area.name}</span>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="icon" onClick={() => startEditArea(area.id, area.name)}><Edit2 size={15} /></Button>
+                {!area.id.startsWith('default_') && (
+                  <Button variant="ghost" size="icon" onClick={() => deleteWorkArea(area.id)}><Trash2 size={15} className="text-destructive" /></Button>
+                )}
+              </div>
+            </div>
+          ))}
+          {workAreas.length === 0 && <div className="px-4 py-8 text-center text-muted-foreground">No Area</div>}
+        </div>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -176,7 +239,6 @@ export default function WorkCodesPage() {
                 {categories.map(c => <option key={c} value={c} />)}
               </datalist>
             </div>
-            <div><Label>施工区域 Area</Label><Input placeholder="e.g. A区 基础施工 / Zone A Foundation" value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{actionLabels.cancel}</Button>

@@ -20,7 +20,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 
 export default function DailyLogPage() {
   const { currentRole, currentPersonnelId, currentUserName } = useAppContext();
-  const { personnel, workCodes, engineerAssignments, getTeamWorkers, getTeamEquipment, getEngineerForemen, dailyLogs, addDailyLog, updateDailyLog, softDeleteDailyLog, restoreDailyLog, deleteDailyLog, emptyTrash } = useDataContext();
+  const { personnel, workCodes, workAreas, engineerAssignments, getTeamWorkers, getTeamEquipment, getEngineerForemen, dailyLogs, addDailyLog, updateDailyLog, softDeleteDailyLog, restoreDailyLog, deleteDailyLog, emptyTrash } = useDataContext();
 
   const getForemanLabel = (log: DailyLog) => {
     const fm = personnel.find(p => p.id === log.foremanId);
@@ -107,7 +107,7 @@ export default function DailyLogPage() {
   const [bulkPickEquip, setBulkPickEquip] = useState<Set<string>>(new Set());
   const [bulkEditWorkerOpen, setBulkEditWorkerOpen] = useState(false);
   const [bulkEditEqOpen, setBulkEditEqOpen] = useState(false);
-  const [bulkEdit, setBulkEdit] = useState<{ start?: string; end?: string; area?: string; workCodeId?: string }>({});
+  const [bulkEdit, setBulkEdit] = useState<{ start?: string; end?: string; area?: string; areaDetail?: string; workCodeId?: string }>({});
   const [bulkPickWorkerSearch, setBulkPickWorkerSearch] = useState('');
   const [bulkPickEquipSearch, setBulkPickEquipSearch] = useState('');
 
@@ -128,7 +128,7 @@ export default function DailyLogPage() {
   const confirmBulkAddWorkers = () => {
     const newOnes = Array.from(bulkPickWorkers).map(wid => {
       const w = teamWorkers.find(x => x.id === wid);
-      return { workerId: wid, workerName: w?.name || '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', workCodeId: '', workCodeName: '', detail: '' };
+      return { workerId: wid, workerName: w?.name || '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' };
     });
     setEntries(prev => [...prev, ...newOnes]);
     setBulkPickWorkers(new Set());
@@ -137,7 +137,7 @@ export default function DailyLogPage() {
   const confirmBulkAddEq = () => {
     const newOnes = Array.from(bulkPickEquip).map(eid => {
       const eq = equipment.find(x => x.id === eid);
-      return { equipmentId: eid, equipmentName: eq?.name || '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', workCodeId: '', workCodeName: '', detail: '' };
+      return { equipmentId: eid, equipmentName: eq?.name || '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' };
     });
     setEqEntries(prev => [...prev, ...newOnes]);
     setBulkPickEquip(new Set());
@@ -152,11 +152,11 @@ export default function DailyLogPage() {
       if (bulkEdit.end) next.endTime = bulkEdit.end;
       next.hours = calcHours(next.startTime, next.endTime);
       if (bulkEdit.area) next.area = bulkEdit.area;
+      if (bulkEdit.areaDetail !== undefined) next.areaDetail = bulkEdit.areaDetail;
       if (bulkEdit.workCodeId) {
         const wc = workCodes.find(c => c.id === bulkEdit.workCodeId);
         next.workCodeId = bulkEdit.workCodeId;
         next.workCodeName = wc ? `[${wc.code}] ${wc.name}` : '';
-        if (wc?.area) next.area = wc.area;
       }
       return next;
     }));
@@ -171,11 +171,11 @@ export default function DailyLogPage() {
       if (bulkEdit.end) next.endTime = bulkEdit.end;
       next.hours = calcHours(next.startTime, next.endTime);
       if (bulkEdit.area) next.area = bulkEdit.area;
+      if (bulkEdit.areaDetail !== undefined) next.areaDetail = bulkEdit.areaDetail;
       if (bulkEdit.workCodeId) {
         const wc = workCodes.find(c => c.id === bulkEdit.workCodeId);
         next.workCodeId = bulkEdit.workCodeId;
         next.workCodeName = wc ? `[${wc.code}] ${wc.name}` : '';
-        if (wc?.area) next.area = wc.area;
       }
       return next;
     }));
@@ -217,8 +217,8 @@ export default function DailyLogPage() {
   };
   const todayLocal = () => format(new Date(), 'yyyy-MM-dd');
 
-  const addWorkerEntry = () => setEntries(prev => [...prev, { workerId: '', workerName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', workCodeId: '', workCodeName: '', detail: '' }]);
-  const addEqEntry = () => setEqEntries(prev => [...prev, { equipmentId: '', equipmentName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', workCodeId: '', workCodeName: '', detail: '' }]);
+  const addWorkerEntry = () => setEntries(prev => [...prev, { workerId: '', workerName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' }]);
+  const addEqEntry = () => setEqEntries(prev => [...prev, { equipmentId: '', equipmentName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' }]);
 
   const updateEntry = (i: number, field: string, value: string | number) => {
     setEntries(prev => prev.map((e, idx) => {
@@ -229,7 +229,7 @@ export default function DailyLogPage() {
       }
       if (field === 'workCodeId') {
         const wc = workCodes.find(c => c.id === value);
-        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '', area: wc?.area || e.area };
+        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
       }
       if (field === 'startTime') {
         const newStart = roundDateTimeToHalfHour(value as string);
@@ -252,7 +252,7 @@ export default function DailyLogPage() {
       }
       if (field === 'workCodeId') {
         const wc = workCodes.find(c => c.id === value);
-        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '', area: wc?.area || e.area };
+        return { ...e, workCodeId: value as string, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
       }
       if (field === 'startTime') {
         const newStart = roundDateTimeToHalfHour(value as string);
@@ -322,9 +322,9 @@ export default function DailyLogPage() {
   const handleSubmit = async () => {
     if (isForeman && !requireEngineer()) return;
     if (entries.length === 0) { toast.error('请至少添加一条工人记录 Please add at least one entry'); return; }
-    if (entries.some(e => !e.workerId || !e.area || !e.workCodeId)) { toast.error('请填写完整工人信息 Please fill in all required fields'); return; }
+    if (entries.some(e => !e.workerId || !e.area || !e.areaDetail?.trim() || !e.workCodeId)) { toast.error('请填写完整工人信息 Please fill in all required fields'); return; }
 
-    if (eqEntries.some(e => !e.equipmentId || !e.area || !e.workCodeId)) { toast.error('Please fill in all required equipment fields'); return; }
+    if (eqEntries.some(e => !e.equipmentId || !e.area || !e.areaDetail?.trim() || !e.workCodeId)) { toast.error('Please fill in all required equipment fields'); return; }
 
     const newEntries: DailyLogEntry[] = entries.map((e, i) => ({ ...e, id: `e_${Date.now()}_${i}` }));
     const newEqEntries: EquipmentUsageEntry[] = eqEntries.map((e, i) => ({ ...e, id: `eu_${Date.now()}_${i}` }));
@@ -368,7 +368,8 @@ export default function DailyLogPage() {
     acc[wc.category].push(wc);
     return acc;
   }, {} as Record<string, typeof workCodes>);
-  const workAreas = Array.from(new Set(workCodes.map(wc => wc.area).filter(Boolean) as string[])).sort();
+  const areaNames = workAreas.map(a => a.name).sort();
+  const formatArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ');
 
   const historyLog = historyLogId ? logs.find(l => l.id === historyLogId) : null;
 
@@ -663,14 +664,18 @@ export default function DailyLogPage() {
                       {i === 0 && <Label className="text-xs text-muted-foreground">施工区域 Area</Label>}
                       <Select value={entry.area} onValueChange={v => updateEntry(i, 'area', v)}>
                         <SelectTrigger className="h-9"><SelectValue placeholder="选择区域 Select area" /></SelectTrigger>
-                        <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                        <SelectContent>{areaNames.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <Button variant="ghost" size="icon" className="h-9" onClick={() => setEntries(prev => prev.filter((_, idx) => idx !== i))}>
                       <Trash2 size={14} className="text-destructive" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-[1fr_1fr] gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">二级区域 Detail Area</Label>
+                      <Input value={entry.areaDetail || ''} onChange={e => updateEntry(i, 'areaDetail', e.target.value)} placeholder="由工长填写 Fill by foreman" className="h-9" />
+                    </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">施工代码 Work Code</Label>
                       <Select value={entry.workCodeId} onValueChange={v => updateEntry(i, 'workCodeId', v)}>
@@ -750,14 +755,18 @@ export default function DailyLogPage() {
                       {i === 0 && <Label className="text-xs text-muted-foreground">施工区域 Area</Label>}
                       <Select value={entry.area} onValueChange={v => updateEqEntry(i, 'area', v)}>
                         <SelectTrigger className="h-9"><SelectValue placeholder="选择区域 Select area" /></SelectTrigger>
-                        <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                        <SelectContent>{areaNames.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <Button variant="ghost" size="icon" className="h-9" onClick={() => setEqEntries(prev => prev.filter((_, idx) => idx !== i))}>
                       <Trash2 size={14} className="text-destructive" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-[1fr_1fr] gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">二级区域 Detail Area</Label>
+                      <Input value={entry.areaDetail || ''} onChange={e => updateEqEntry(i, 'areaDetail', e.target.value)} placeholder="由工长填写 Fill by foreman" className="h-9" />
+                    </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">施工代码 Work Code</Label>
                       <Select value={entry.workCodeId} onValueChange={v => updateEqEntry(i, 'workCodeId', v)}>
@@ -900,7 +909,7 @@ export default function DailyLogPage() {
                             </span>
                               <span className="text-sm text-muted-foreground">{formatDT(e.startTime)}–{formatDT(e.endTime)}</span>
                               <span className="text-sm text-muted-foreground">{e.hours}h</span>
-                              <span className="text-sm text-muted-foreground">{e.area}</span>
+                              <span className="text-sm text-muted-foreground">{formatArea(e)}</span>
                             <span className="font-mono text-xs text-muted-foreground ml-auto">{e.workCodeName}</span>
                           </div>
                           {isExpanded && (
@@ -910,7 +919,7 @@ export default function DailyLogPage() {
                                   <div><span className="text-muted-foreground">开始时间 Start：</span><span className="font-medium">{formatDT(e.startTime)}</span></div>
                                   <div><span className="text-muted-foreground">结束时间 End：</span><span className="font-medium">{formatDT(e.endTime)}</span></div>
                                   <div><span className="text-muted-foreground">工时 Hours：</span><span className="font-medium">{e.hours}h</span></div>
-                                  <div><span className="text-muted-foreground">施工区域 Area：</span><span className="font-medium">{e.area}</span></div>
+                                  <div><span className="text-muted-foreground">施工区域 Area：</span><span className="font-medium">{formatArea(e)}</span></div>
                                   <div><span className="text-muted-foreground">施工代码 Code：</span><span className="font-mono font-medium">{e.workCodeName}</span></div>
                                 </div>
                               {e.detail && (
@@ -944,7 +953,7 @@ export default function DailyLogPage() {
                               <span className="font-medium text-sm">{eu.equipmentName}</span>
                               <span className="text-sm text-muted-foreground">{formatDT(eu.startTime)}–{formatDT(eu.endTime)}</span>
                               <span className="text-sm text-muted-foreground">{eu.hours}h</span>
-                              <span className="text-sm text-muted-foreground">{eu.area}</span>
+                              <span className="text-sm text-muted-foreground">{formatArea(eu)}</span>
                               <span className="font-mono text-xs text-muted-foreground ml-auto">{eu.workCodeName}</span>
                             </div>
                             {isExpanded && (
@@ -954,7 +963,7 @@ export default function DailyLogPage() {
                                   <div><span className="text-muted-foreground">开始时间 Start：</span><span className="font-medium">{formatDT(eu.startTime)}</span></div>
                                   <div><span className="text-muted-foreground">结束时间 End：</span><span className="font-medium">{formatDT(eu.endTime)}</span></div>
                                   <div><span className="text-muted-foreground">使用时长 Duration：</span><span className="font-medium">{eu.hours}h</span></div>
-                                  <div><span className="text-muted-foreground">使用区域 Area：</span><span className="font-medium">{eu.area}</span></div>
+                                  <div><span className="text-muted-foreground">使用区域 Area：</span><span className="font-medium">{formatArea(eu)}</span></div>
                                   <div><span className="text-muted-foreground">施工内容 Work Code：</span><span className="font-medium">{eu.workCodeName}</span></div>
                                 </div>
                                 {eu.detail && (
@@ -1054,7 +1063,7 @@ export default function DailyLogPage() {
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="不修改 Keep" /></SelectTrigger>
-                <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                <SelectContent>{areaNames.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">施工代码 Work Code</Label>
@@ -1091,7 +1100,7 @@ export default function DailyLogPage() {
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="不修改 Keep" /></SelectTrigger>
-                <SelectContent>{workAreas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                <SelectContent>{areaNames.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">施工代码 Work Code</Label>

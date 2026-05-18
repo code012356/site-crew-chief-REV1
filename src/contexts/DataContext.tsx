@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { Personnel, Equipment, TeamAssignment, PersonnelStatus, EquipmentStatus, WorkCode, EngineerAssignment, DailyLog, DailyLogEntry, EquipmentUsageEntry, LogRevision, EquipmentRequest, EquipmentRequestStatus } from '@/lib/types';
+import { Personnel, Equipment, TeamAssignment, PersonnelStatus, EquipmentStatus, WorkCode, WorkArea, EngineerAssignment, DailyLog, DailyLogEntry, EquipmentUsageEntry, LogRevision, EquipmentRequest, EquipmentRequestStatus, DEFAULT_WORK_AREAS } from '@/lib/types';
 import { supabase } from '@/integrations/supabase/client';
 
 interface DataContextType {
@@ -7,6 +7,7 @@ interface DataContextType {
   equipment: Equipment[];
   teamAssignments: TeamAssignment[];
   workCodes: WorkCode[];
+  workAreas: WorkArea[];
   engineerAssignments: EngineerAssignment[];
   dailyLogs: DailyLog[];
   equipmentRequests: EquipmentRequest[];
@@ -26,6 +27,9 @@ interface DataContextType {
   addWorkCode: (wc: Omit<WorkCode, 'id'>) => Promise<void>;
   updateWorkCode: (id: string, updates: Partial<Omit<WorkCode, 'id'>>) => Promise<void>;
   deleteWorkCode: (id: string) => Promise<void>;
+  addWorkArea: (name: string) => Promise<void>;
+  updateWorkArea: (id: string, name: string) => Promise<void>;
+  deleteWorkArea: (id: string) => Promise<void>;
   // Equipment CRUD
   addEquipment: (eq: Omit<Equipment, 'id'>) => Promise<string>;
   updateEquipment: (id: string, updates: Partial<Omit<Equipment, 'id'>>) => Promise<void>;
@@ -118,6 +122,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [teamAssignments, setTeamAssignments] = useState<TeamAssignment[]>([]);
   const [workCodes, setWorkCodes] = useState<WorkCode[]>([]);
+  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [engineerAssignments, setEngineerAssignments] = useState<EngineerAssignment[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [equipmentRequests, setEquipmentRequests] = useState<EquipmentRequest[]>([]);
@@ -169,6 +174,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (data) {
       setWorkCodes(data.map((r: any) => ({ id: r.id, code: r.code, name: r.name, category: r.category, area: r.area || undefined })));
     }
+  }, []);
+
+  const fetchWorkAreas = useCallback(async () => {
+    const { data, error } = await (supabase as any)
+      .from('work_areas')
+      .select('*')
+      .order('name');
+    if (error) {
+      console.warn('Fetch work_areas failed; using defaults until migration is applied', error);
+      setWorkAreas(DEFAULT_WORK_AREAS.map((name, index) => ({ id: `default_${index}`, name })));
+      return;
+    }
+    const rows = (data || []).map((r: any) => ({ id: r.id, name: r.name }));
+    setWorkAreas(rows.length ? rows : DEFAULT_WORK_AREAS.map((name, index) => ({ id: `default_${index}`, name })));
   }, []);
 
   const fetchTeamAssignments = useCallback(async () => {
@@ -232,8 +251,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([fetchPersonnel(), fetchEquipment(), fetchWorkCodes(), fetchTeamAssignments(), fetchEngineerAssignments(), fetchDailyLogs(), fetchEquipmentRequests()]);
-  }, [fetchPersonnel, fetchEquipment, fetchWorkCodes, fetchTeamAssignments, fetchEngineerAssignments, fetchDailyLogs, fetchEquipmentRequests]);
+    await Promise.all([fetchPersonnel(), fetchEquipment(), fetchWorkCodes(), fetchWorkAreas(), fetchTeamAssignments(), fetchEngineerAssignments(), fetchDailyLogs(), fetchEquipmentRequests()]);
+  }, [fetchPersonnel, fetchEquipment, fetchWorkCodes, fetchWorkAreas, fetchTeamAssignments, fetchEngineerAssignments, fetchDailyLogs, fetchEquipmentRequests]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
@@ -260,9 +279,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personnel' }, () => { fetchPersonnel(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'engineer_assignments' }, () => { fetchEngineerAssignments(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'work_codes' }, () => { fetchWorkCodes(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_areas' }, () => { fetchWorkAreas(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchEquipment, fetchEquipmentRequests, fetchTeamAssignments, fetchPersonnel, fetchEngineerAssignments, fetchWorkCodes]);
+  }, [fetchEquipment, fetchEquipmentRequests, fetchTeamAssignments, fetchPersonnel, fetchEngineerAssignments, fetchWorkCodes, fetchWorkAreas]);
 
   // ── Personnel CRUD ──
   const addPersonnel = async (p: Omit<Personnel, 'id'>): Promise<string> => {
@@ -419,6 +439,22 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const { error } = await supabase.from('work_codes').delete().eq('id', id);
     assertSupabaseOk(error, 'Delete work code');
     await fetchWorkCodes();
+  };
+
+  const addWorkArea = async (name: string) => {
+    const { error } = await (supabase as any).from('work_areas').insert({ name: name.trim() });
+    assertSupabaseOk(error, 'Add work area');
+    await fetchWorkAreas();
+  };
+  const updateWorkArea = async (id: string, name: string) => {
+    const { error } = await (supabase as any).from('work_areas').update({ name: name.trim() }).eq('id', id);
+    assertSupabaseOk(error, 'Update work area');
+    await fetchWorkAreas();
+  };
+  const deleteWorkArea = async (id: string) => {
+    const { error } = await (supabase as any).from('work_areas').delete().eq('id', id);
+    assertSupabaseOk(error, 'Delete work area');
+    await fetchWorkAreas();
   };
 
   // ── Equipment CRUD ──
@@ -639,11 +675,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <DataContext.Provider value={{
-      personnel, equipment, teamAssignments, workCodes, engineerAssignments, dailyLogs, equipmentRequests,
+      personnel, equipment, teamAssignments, workCodes, workAreas, engineerAssignments, dailyLogs, equipmentRequests,
       getTeamWorkers, getTeamEquipment, getAvailableWorkers, getAvailableEquipment, getEngineerForemen,
       addPersonnel, updatePersonnel, deletePersonnel, batchUpdatePersonnelStatus,
       batchDeletePersonnel, batchAddPersonnel,
       addWorkCode, updateWorkCode, deleteWorkCode,
+      addWorkArea, updateWorkArea, deleteWorkArea,
       addEquipment, updateEquipment, deleteEquipment,
       updateTeamAssignment, addWorkerToTeam, removeWorkerFromTeam, addEquipmentToTeam, removeEquipmentFromTeam, setTeamAssignmentsBatch,
       setEngineerAssignmentsBatch,

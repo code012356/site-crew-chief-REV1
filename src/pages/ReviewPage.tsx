@@ -10,6 +10,7 @@ import { logStatusLabels, pageTitles, fieldLabels, actionLabels, messages } from
 import RevisionHistoryDialog from '@/components/RevisionHistoryDialog';
 
 const formatDT = (dt: string) => dt ? dt.replace('T', ' ') : '-';
+const formatArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ');
 
 export default function ReviewPage() {
   const { currentPersonnelId } = useAppContext();
@@ -118,7 +119,7 @@ export default function ReviewPage() {
                   <span className="font-mono font-semibold text-sm w-20">{getWorkerLabel(e.workerId, e.workerName)}</span>
                   <span className="text-sm text-muted-foreground">{formatDT(e.startTime)} - {formatDT(e.endTime)}</span>
                   <span className="text-sm text-muted-foreground">{e.hours}h</span>
-                  <span className="text-sm text-muted-foreground">{e.area}</span>
+                  <span className="text-sm text-muted-foreground">{formatArea(e)}</span>
                   <span className="font-mono text-xs text-muted-foreground ml-auto">{e.workCodeName}</span>
                 </div>
                 {isExpanded && (
@@ -128,7 +129,7 @@ export default function ReviewPage() {
                       <div><span className="text-muted-foreground">Start: </span><span className="font-medium">{formatDT(e.startTime)}</span></div>
                       <div><span className="text-muted-foreground">End: </span><span className="font-medium">{formatDT(e.endTime)}</span></div>
                       <div><span className="text-muted-foreground">{fieldLabels.hours}: </span><span className="font-medium">{e.hours}h</span></div>
-                      <div><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{e.area}</span></div>
+                      <div><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{formatArea(e)}</span></div>
                       <div><span className="text-muted-foreground">{fieldLabels.workCode}: </span><span className="font-mono font-medium">{e.workCodeName}</span></div>
                     </div>
                     {e.detail && (
@@ -158,7 +159,7 @@ export default function ReviewPage() {
                     <span className="font-medium text-sm">{eu.equipmentName}</span>
                     <span className="text-sm text-muted-foreground">{formatDT(eu.startTime)} - {formatDT(eu.endTime)}</span>
                     <span className="text-sm text-muted-foreground">{eu.hours}h</span>
-                    <span className="text-sm text-muted-foreground">{eu.area}</span>
+                    <span className="text-sm text-muted-foreground">{formatArea(eu)}</span>
                     <span className="font-mono text-xs text-muted-foreground ml-auto">{eu.workCodeName}</span>
                   </div>
                   {isExpanded && (
@@ -168,7 +169,7 @@ export default function ReviewPage() {
                         <div><span className="text-muted-foreground">Start: </span><span className="font-medium">{formatDT(eu.startTime)}</span></div>
                         <div><span className="text-muted-foreground">End: </span><span className="font-medium">{formatDT(eu.endTime)}</span></div>
                         <div><span className="text-muted-foreground">{fieldLabels.hours}: </span><span className="font-medium">{eu.hours}h</span></div>
-                        <div><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{eu.area}</span></div>
+                        <div><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{formatArea(eu)}</span></div>
                         <div><span className="text-muted-foreground">Work Code: </span><span className="font-medium">{eu.workCodeName}</span></div>
                       </div>
                       {eu.detail && <div><span className="text-muted-foreground">Description: </span><p className="mt-0.5 font-medium">{eu.detail}</p></div>}

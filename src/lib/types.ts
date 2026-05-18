@@ -64,6 +64,7 @@ export interface DailyLogEntry {
   endTime: string;
   hours: number;
   area: string;
+  areaDetail?: string;
   workCodeId: string;
   workCodeName: string;
   detail: string;
@@ -77,6 +78,11 @@ export interface WorkCode {
   area?: string;
 }
 
+export interface WorkArea {
+  id: string;
+  name: string;
+}
+
 export interface EquipmentUsageEntry {
   id: string;
   equipmentId: string;
@@ -85,6 +91,7 @@ export interface EquipmentUsageEntry {
   endTime: string;
   hours: number;
   area: string;
+  areaDetail?: string;
   workCodeId: string;
   workCodeName: string;
   detail: string;
@@ -119,6 +126,15 @@ export interface EquipmentRequest {
   createdAt: string;
   resolvedAt?: string;
 }
+
+export const DEFAULT_WORK_AREAS = [
+  'Area A',
+  'Area B',
+  'Area C',
+  'Area D',
+  'Area E',
+  'Area F',
+];
 
 export const WORK_AREAS = [
   'A区 基础施工',
