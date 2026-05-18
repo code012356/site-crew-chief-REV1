@@ -18,6 +18,37 @@ import { exportDailyLogs } from '@/lib/excel-utils';
 import RevisionHistoryDialog from '@/components/RevisionHistoryDialog';
 import SearchableSelect from '@/components/SearchableSelect';
 
+const HALF_HOUR_TIMES = Array.from({ length: 48 }, (_, i) => {
+  const hour = String(Math.floor(i / 2)).padStart(2, '0');
+  const minute = i % 2 === 0 ? '00' : '30';
+  return `${hour}:${minute}`;
+});
+
+function splitDateTime(value: string) {
+  const [date = format(new Date(), 'yyyy-MM-dd'), time = '07:00'] = (value || '').split('T');
+  const [hour = '07', minute = '00'] = time.split(':');
+  const normalizedMinute = Number(minute) < 30 ? '00' : '30';
+  return { date, time: `${hour.padStart(2, '0')}:${normalizedMinute}` };
+}
+
+function HalfHourDateTimePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const current = splitDateTime(value);
+  const setDate = (date: string) => onChange(`${date}T${current.time}`);
+  const setTime = (time: string) => onChange(`${current.date}T${time}`);
+
+  return (
+    <div className="grid grid-cols-[1.35fr_0.9fr] gap-1">
+      <Input type="date" value={current.date} onChange={e => setDate(e.target.value)} className="h-9 text-xs" />
+      <Select value={current.time} onValueChange={setTime}>
+        <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent className="max-h-64">
+          {HALF_HOUR_TIMES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 export default function DailyLogPage() {
   const { currentRole, currentPersonnelId, currentUserName } = useAppContext();
   const { personnel, workCodes, workAreas, engineerAssignments, getTeamWorkers, getTeamEquipment, getEngineerForemen, dailyLogs, addDailyLog, updateDailyLog, softDeleteDailyLog, restoreDailyLog, deleteDailyLog, emptyTrash } = useDataContext();
@@ -650,11 +681,11 @@ export default function DailyLogPage() {
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">开始 Start</Label>}
-                      <Input type="datetime-local" step={1800} value={entry.startTime} onChange={e => updateEntry(i, 'startTime', e.target.value)} className="h-9 text-xs" />
+                      <HalfHourDateTimePicker value={entry.startTime} onChange={v => updateEntry(i, 'startTime', v)} />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">结束 End</Label>}
-                      <Input type="datetime-local" step={1800} value={entry.endTime} onChange={e => updateEntry(i, 'endTime', e.target.value)} className="h-9 text-xs" />
+                      <HalfHourDateTimePicker value={entry.endTime} onChange={v => updateEntry(i, 'endTime', v)} />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">工时 h</Label>}
@@ -741,11 +772,11 @@ export default function DailyLogPage() {
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">开始 Start</Label>}
-                      <Input type="datetime-local" step={1800} value={entry.startTime} onChange={e => updateEqEntry(i, 'startTime', e.target.value)} className="h-9 text-xs" />
+                      <HalfHourDateTimePicker value={entry.startTime} onChange={v => updateEqEntry(i, 'startTime', v)} />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">结束 End</Label>}
-                      <Input type="datetime-local" step={1800} value={entry.endTime} onChange={e => updateEqEntry(i, 'endTime', e.target.value)} className="h-9 text-xs" />
+                      <HalfHourDateTimePicker value={entry.endTime} onChange={v => updateEqEntry(i, 'endTime', v)} />
                     </div>
                     <div>
                       {i === 0 && <Label className="text-xs text-muted-foreground">工时 h</Label>}
@@ -1057,8 +1088,8 @@ export default function DailyLogPage() {
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">仅填写需要修改的字段，留空则不变 Only filled fields will be updated</p>
             <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">开始 Start</Label><Input type="datetime-local" step={1800} value={bulkEdit.start || ''} onChange={e => setBulkEdit(p => ({ ...p, start: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
-              <div><Label className="text-xs">结束 End</Label><Input type="datetime-local" step={1800} value={bulkEdit.end || ''} onChange={e => setBulkEdit(p => ({ ...p, end: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
+              <div><Label className="text-xs">开始 Start</Label><HalfHourDateTimePicker value={bulkEdit.start || defaultStart()} onChange={v => setBulkEdit(p => ({ ...p, start: v }))} /></div>
+              <div><Label className="text-xs">结束 End</Label><HalfHourDateTimePicker value={bulkEdit.end || defaultEnd()} onChange={v => setBulkEdit(p => ({ ...p, end: v }))} /></div>
             </div>
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
@@ -1094,8 +1125,8 @@ export default function DailyLogPage() {
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">仅填写需要修改的字段，留空则不变 Only filled fields will be updated</p>
             <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">开始 Start</Label><Input type="datetime-local" step={1800} value={bulkEdit.start || ''} onChange={e => setBulkEdit(p => ({ ...p, start: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
-              <div><Label className="text-xs">结束 End</Label><Input type="datetime-local" step={1800} value={bulkEdit.end || ''} onChange={e => setBulkEdit(p => ({ ...p, end: roundDateTimeToHalfHour(e.target.value) }))} className="h-9" /></div>
+              <div><Label className="text-xs">开始 Start</Label><HalfHourDateTimePicker value={bulkEdit.start || defaultStart()} onChange={v => setBulkEdit(p => ({ ...p, start: v }))} /></div>
+              <div><Label className="text-xs">结束 End</Label><HalfHourDateTimePicker value={bulkEdit.end || defaultEnd()} onChange={v => setBulkEdit(p => ({ ...p, end: v }))} /></div>
             </div>
             <div><Label className="text-xs">区域 Area</Label>
               <Select value={bulkEdit.area || ''} onValueChange={v => setBulkEdit(p => ({ ...p, area: v }))}>
