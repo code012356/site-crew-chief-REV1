@@ -1026,8 +1026,8 @@ export default function PersonnelPage() {
                   <tr><td className="px-3 py-1.5 font-mono text-xs">所属项目/部门</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Structure Team...</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">所属工长</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Foreman/Officer</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">一线/二线</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">site / Indirect</td></tr>
-                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假日期</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Leave date or date range</td></tr>
-                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假次数</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Leave count</td></tr>
+                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假日期/Leave Date</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">YYYY-MM-DD or date range</td></tr>
+                  <tr><td className="px-3 py-1.5 font-mono text-xs">休假次数/Leave Count</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">Number of leave records</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">护照号码/Passport</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">护照号码</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">签证有效期/Visa</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">YYYYMMDD</td></tr>
                   <tr><td className="px-3 py-1.5 font-mono text-xs">入场日期</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">YYYY.MM.DD</td></tr>
