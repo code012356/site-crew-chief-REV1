@@ -1,73 +1,197 @@
-# Welcome to your Lovable project
+# Site Crew Chief REV1
 
-## Project info
+Site Crew Chief REV1 is a construction site crew management system built with React, Vite, TypeScript, Tailwind CSS, shadcn/ui, and Supabase. It focuses on daily labor logs, equipment usage, foreman team assignment, work code management, review workflows, and operations reporting.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+The app is designed for three main operational roles:
 
-## How can I edit this code?
+- **Admin**: manage accounts, personnel, engineers, work codes, equipment, and approvals.
+- **Foreman**: manage assigned workers/equipment and submit daily logs.
+- **Engineer**: review daily logs and equipment requests.
 
-There are several ways of editing your application.
+## Features
 
-**Use Lovable**
+- **Authentication and account management**
+  - Role-based login for admin, foreman, and engineer accounts.
+  - Account approval workflow linked to personnel records.
+  - Phone number support for approved accounts.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- **Personnel and team management**
+  - Personnel records for workers, foremen, and engineers.
+  - Foreman team assignment for workers and equipment.
+  - Deduped assignment logic to reduce duplicated team membership.
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Daily logs**
+  - Labor and equipment daily log submission.
+  - Local-date handling for log dates.
+  - Required field validation for worker and equipment entries.
+  - Review statuses including pending, approved, conditional, rejected, withdraw requested, and withdrawn.
 
-**Use your preferred IDE**
+- **Equipment management**
+  - Equipment registry and status tracking.
+  - Equipment request workflow for existing and new equipment.
+  - Approved new equipment is created, assigned, and linked back to the request.
+  - Equipment assignment is normalized so one equipment item belongs to one foreman team at a time.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **Review and analytics**
+  - Review page for engineer/admin actions.
+  - Withdrawal review keeps structured previous status data.
+  - Analytics dashboard for labor, equipment, and work-code based reporting.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- **Supabase database**
+  - SQL migrations are included under `supabase/migrations`.
+  - Data integrity migration adds role/status checks and uniqueness constraints for important fields.
 
-Follow these steps:
+## Tech Stack
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- React 18
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui and Radix UI
+- Supabase JavaScript client
+- React Router
+- TanStack Query
+- Vitest
+- ESLint
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Project Structure
 
-# Step 3: Install the necessary dependencies.
-npm i
+```text
+src/
+  contexts/
+    AppContext.tsx       # Authentication, accounts, and app-level data
+    DataContext.tsx      # Personnel, teams, equipment, logs, and work codes
+  pages/
+    AccountManagePage.tsx
+    AnalyticsPage.tsx
+    DailyLogPage.tsx
+    Dashboard.tsx
+    EngineerManagePage.tsx
+    EquipmentPage.tsx
+    ForemanTeamPage.tsx
+    LoginPage.tsx
+    PersonnelPage.tsx
+    ReviewPage.tsx
+    WorkCodesPage.tsx
+  lib/
+    supabase.ts          # Supabase client
+    types.ts             # Shared domain types
+supabase/
+  migrations/            # Database schema and data integrity migrations
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Requirements
+
+- Node.js 18 or newer
+- npm
+- Supabase project
+- Supabase CLI for database migration work
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+## Environment Variables
+
+Create a `.env` file from `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the Supabase values:
+
+```env
+VITE_SUPABASE_PROJECT_ID="your-supabase-project-id"
+VITE_SUPABASE_URL="https://your-supabase-project.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY="your-supabase-publishable-key"
+```
+
+Only use the Supabase **publishable** key in the frontend environment file. Do not commit secret keys or personal access tokens.
+
+## Local Development
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Build for production:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+npm run build
+```
 
-**Use GitHub Codespaces**
+Preview the production build:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+npm run preview
+```
 
-## What technologies are used for this project?
+Run tests:
 
-This project is built with:
+```bash
+npm test
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Run lint:
 
-## How can I deploy this project?
+```bash
+npm run lint
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Supabase Setup
 
-## Can I connect a custom domain to my Lovable project?
+This repository includes Supabase migrations. After installing dependencies, link the local project to a Supabase project:
 
-Yes, you can!
+```bash
+npx supabase link --project-ref your-project-ref
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Push migrations:
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```bash
+npx supabase db push
+```
+
+The migration set creates and updates the application tables used by the frontend. The latest integrity migration adds database-level constraints for common data quality issues, including role/status checks and uniqueness rules.
+
+## Data Notes
+
+- `team_assignments` stores assigned worker and equipment IDs for each foreman.
+- Frontend logic normalizes equipment assignment so a piece of equipment is removed from other teams before being assigned to a new foreman.
+- Some relationship fields are stored as text or JSON arrays in the existing schema, so not every relationship can be enforced as a traditional foreign key without a larger schema refactor.
+- Row Level Security policies currently need a production hardening pass before handling sensitive real-world data.
+- Account passwords are currently stored and checked through the application tables. For production use, migrate authentication to Supabase Auth or another secure password hashing/authentication flow.
+
+## Deployment
+
+The app is a standard Vite frontend and can be deployed to Vercel or any static hosting provider that supports environment variables.
+
+Required production environment variables:
+
+- `VITE_SUPABASE_PROJECT_ID`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Build command:
+
+```bash
+npm run build
+```
+
+Output directory:
+
+```text
+dist
+```
+
+## Current Quality Status
+
+- Production build passes.
+- Basic Vitest test suite passes.
+- ESLint currently reports existing type/style debt, mostly around `any`, empty interfaces, and React refresh warnings.
+- Business data fixes have been added for equipment assignment, daily log validation, local date handling, phone-based account approval, withdrawal status recovery, and Supabase data integrity constraints.
