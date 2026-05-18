@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'foreman' | 'engineer';
+export type UserRole = 'admin' | 'equipment_admin' | 'foreman' | 'engineer';
 
 export type PersonnelStatus = 'active' | 'leave' | 'resigned';
 export type EquipmentStatus = 'available' | 'in_use' | 'maintenance' | 'retired';

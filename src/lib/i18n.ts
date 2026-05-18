@@ -5,6 +5,7 @@ export const roleLabels: Record<string, string> = {
   foreman: '工长 Foreman',
   engineer: '工程师 Engineer',
   admin: '管理员 Admin',
+  equipment_admin: '设备管理员 Equipment Admin',
 };
 
 export const personnelStatusLabels: Record<string, string> = {

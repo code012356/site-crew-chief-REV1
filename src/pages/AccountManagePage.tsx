@@ -72,7 +72,7 @@ export default function AccountManagePage() {
       return existingPersonnelId;
     }
     // Check if personnel with this laborId or phone already exists
-    const personnelRole = role === 'admin' ? 'engineer' : role;
+    const personnelRole = role === 'admin' || role === 'equipment_admin' ? 'engineer' : role;
     const existing = personnel.find(p => 
       (p.role === 'foreman' || p.role === 'engineer') && (
         (laborId && p.laborId === laborId) ||
@@ -209,7 +209,7 @@ export default function AccountManagePage() {
       }
       toast.success('账号已更新 Account updated');
     } else {
-      const linkedPersonnelId = form.role !== 'admin' ? await initializePersonnel(form.displayName, form.role, form.laborId, form.phone, linkPersonnelId) : undefined;
+      const linkedPersonnelId = form.role !== 'admin' && form.role !== 'equipment_admin' ? await initializePersonnel(form.displayName, form.role, form.laborId, form.phone, linkPersonnelId) : undefined;
       await addAccount({ ...form, enabled: true, laborId: form.laborId || undefined, linkedPersonnelId, phone: form.phone || undefined });
       toast.success('账号已创建并初始化 Account created and initialized');
     }
@@ -452,7 +452,7 @@ export default function AccountManagePage() {
                 <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="请输入手机号 Enter phone number" className="pl-9" />
               </div>
             </div>
-            <div><label className="text-sm font-medium mb-1 block">工号 Labor ID</label><Input value={form.laborId} onChange={e => setForm(f => ({ ...f, laborId: e.target.value }))} placeholder={form.role === 'engineer' || form.role === 'admin' ? '纯数字 e.g. 20240009' : '以LQ开头 e.g. LQ-2024-003'} /></div>
+            <div><label className="text-sm font-medium mb-1 block">工号 Labor ID</label><Input value={form.laborId} onChange={e => setForm(f => ({ ...f, laborId: e.target.value }))} placeholder={form.role === 'engineer' || form.role === 'admin' || form.role === 'equipment_admin' ? '可选，纯数字 e.g. 20240009' : '以LQ开头 e.g. LQ-2024-003'} /></div>
             {!editingId && (<div><label className="text-sm font-medium mb-1 block">密码 Password</label><Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="请设置密码（至少6位）Set password (min 6 chars)" /></div>)}
             <div>
               <label className="text-sm font-medium mb-1 block">角色 Role</label>
@@ -460,6 +460,7 @@ export default function AccountManagePage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">{roleLabels.admin}</SelectItem>
+                  <SelectItem value="equipment_admin">{roleLabels.equipment_admin}</SelectItem>
                   <SelectItem value="foreman">{roleLabels.foreman}</SelectItem>
                   <SelectItem value="engineer">{roleLabels.engineer}</SelectItem>
                 </SelectContent>

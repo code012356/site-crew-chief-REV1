@@ -33,7 +33,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: navLabels.dashboard, path: '/', icon: <LayoutDashboard size={20} />, roles: ['admin', 'foreman', 'engineer'] },
   { label: navLabels.personnel, path: '/personnel', icon: <Users size={20} />, roles: ['admin'] },
-  { label: navLabels.equipment, path: '/equipment', icon: <Wrench size={20} />, roles: ['admin', 'foreman', 'engineer'] },
+  { label: navLabels.equipment, path: '/equipment', icon: <Wrench size={20} />, roles: ['equipment_admin', 'foreman', 'engineer'] },
   { label: navLabels.workCodes, path: '/work-codes', icon: <ClipboardList size={20} />, roles: ['admin'] },
   { label: navLabels.accounts, path: '/accounts', icon: <UserCog size={20} />, roles: ['admin'] },
   { label: navLabels.team, path: '/team', icon: <UsersRound size={20} />, roles: ['foreman'] },
@@ -45,6 +45,7 @@ const navItems: NavItem[] = [
 
 const roleLabels: Record<UserRole, string> = {
   admin: i18nRoleLabels.admin,
+  equipment_admin: i18nRoleLabels.equipment_admin,
   foreman: i18nRoleLabels.foreman,
   engineer: i18nRoleLabels.engineer,
 };

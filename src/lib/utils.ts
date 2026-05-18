@@ -5,10 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function validateLaborId(laborId: string, role: 'worker' | 'foreman' | 'engineer' | 'admin'): string | null {
+export function validateLaborId(laborId: string, role: 'worker' | 'foreman' | 'engineer' | 'admin' | 'equipment_admin'): string | null {
   if (!laborId.trim()) return null;
   const id = laborId.trim();
-  if (role === 'engineer' || role === 'admin') {
+  if (role === 'engineer' || role === 'admin' || role === 'equipment_admin') {
     if (!/^\d+$/.test(id)) {
       return '工程师工号必须为纯数字 Engineer labor ID must be digits only';
     }

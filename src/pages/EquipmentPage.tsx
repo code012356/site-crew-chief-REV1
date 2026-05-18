@@ -25,7 +25,7 @@ export default function EquipmentPage() {
     addEquipmentToTeam,
   } = useDataContext();
 
-  const isAdmin = currentRole === 'admin';
+  const isEquipmentManager = currentRole === 'equipment_admin';
   const foremen = personnel.filter(p => p.role === 'foreman' && p.status !== 'resigned');
   const availableEquipment = equipment.filter(e => e.status !== 'retired');
 
@@ -376,7 +376,7 @@ export default function EquipmentPage() {
         <p className="text-sm text-muted-foreground mb-1">班组 Team：{fmName || fieldLabels.unassigned}</p>
         {engName && <p className="text-sm text-muted-foreground mb-1">工程师 Engineer：{engName}</p>}
         <div className="mt-3 flex gap-2">
-          {isAdmin ? (
+          {isEquipmentManager ? (
             <>
               <Button variant="outline" size="sm" onClick={() => openEdit(eq)} className="gap-1"><Edit2 size={13} /> {actionLabels.edit}</Button>
               <Button variant="outline" size="sm" onClick={async () => {
@@ -507,7 +507,7 @@ export default function EquipmentPage() {
 
   // ── Admin approve dialog ──
   const renderAdminApproveDialog = () => (
-    <Dialog open={approveDialogOpen && (isAdmin)} onOpenChange={v => { if (!v) setApproveDialogOpen(false); }}>
+    <Dialog open={approveDialogOpen && isEquipmentManager} onOpenChange={v => { if (!v) setApproveDialogOpen(false); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>处理设备申请 Process Equipment Request</DialogTitle></DialogHeader>
         {selectedRequest && (
@@ -656,7 +656,7 @@ export default function EquipmentPage() {
   );
 
   // ── Admin view ──
-  if (isAdmin) {
+  if (isEquipmentManager) {
     return (
       <div>
         <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
