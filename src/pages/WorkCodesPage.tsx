@@ -86,7 +86,9 @@ export default function WorkCodesPage() {
     if (!file) return;
     try {
       const imported = await importWorkCodes(file);
-      for (const wc of imported) {
+      const rowsByCode = new Map<string, WorkCode>();
+      imported.forEach(wc => rowsByCode.set(wc.code, wc));
+      for (const wc of rowsByCode.values()) {
         const existing = workCodes.find(w => w.code === wc.code);
         const payload = { name: wc.name, category: wc.category, area: wc.area };
         if (existing) {
@@ -95,9 +97,10 @@ export default function WorkCodesPage() {
           await addWorkCode({ code: wc.code, ...payload });
         }
       }
-      toast.success(`${messages.imported} (${imported.length})`);
-    } catch {
-      toast.error(messages.importFailed);
+      toast.success(`${messages.imported} (${rowsByCode.size})`);
+    } catch (error) {
+      console.error('Import work codes failed', error);
+      toast.error(error instanceof Error ? error.message : messages.importFailed);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };

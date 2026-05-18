@@ -234,10 +234,10 @@ export function importWorkCodes(file: File): Promise<WorkCode[]> {
         const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
         const codes: WorkCode[] = rows.map((row, index) => ({
           id: `imp_wc_${Date.now()}_${index}`,
-          code: getByHeader(row, ['Code', '代码']).trim(),
-          name: getByHeader(row, ['Name', '名称']).trim(),
-          area: getByHeader(row, ['Area', '施工区域', '区域']) || undefined,
-          category: getByHeader(row, ['Category', '分类']) || '其他',
+          code: getByHeader(row, ['Code', 'Work Code', 'Cost Code', '施工代码', '成本代码', '代码']).trim(),
+          name: getByHeader(row, ['Name', 'Work Name', 'Cost Name', 'Description', '名称', '姓名']).trim(),
+          area: getByHeader(row, ['Area', 'Work Area', '施工区域', '区域']) || undefined,
+          category: getByHeader(row, ['Category', 'Type', '分类', '类别']) || '其他',
         })).filter(code => code.code && code.name);
         resolve(codes);
       } catch {

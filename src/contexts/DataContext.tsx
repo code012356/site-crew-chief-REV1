@@ -66,6 +66,11 @@ function assertSupabaseOk(error: any, action: string) {
   }
 }
 
+function isMissingAreaColumnError(error: any) {
+  const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+  return text.includes('area') && (text.includes('column') || text.includes('schema cache'));
+}
+
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
@@ -387,7 +392,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Work code CRUD ──
   const addWorkCode = async (wc: Omit<WorkCode, 'id'>) => {
-    const { error } = await supabase.from('work_codes').insert({ code: wc.code, name: wc.name, category: wc.category, area: wc.area || null } as any);
+    const row = { code: wc.code, name: wc.name, category: wc.category, area: wc.area || null };
+    let { error } = await supabase.from('work_codes').insert(row as any);
+    if (error && isMissingAreaColumnError(error)) {
+      const { area, ...fallbackRow } = row;
+      ({ error } = await supabase.from('work_codes').insert(fallbackRow as any));
+    }
     assertSupabaseOk(error, 'Add work code');
     await fetchWorkCodes();
   };
@@ -397,7 +407,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.name !== undefined) db.name = updates.name;
     if (updates.category !== undefined) db.category = updates.category;
     if (updates.area !== undefined) db.area = updates.area || null;
-    const { error } = await supabase.from('work_codes').update(db).eq('id', id);
+    let { error } = await supabase.from('work_codes').update(db).eq('id', id);
+    if (error && isMissingAreaColumnError(error)) {
+      const { area, ...fallbackDb } = db;
+      ({ error } = await supabase.from('work_codes').update(fallbackDb).eq('id', id));
+    }
     assertSupabaseOk(error, 'Update work code');
     await fetchWorkCodes();
   };
