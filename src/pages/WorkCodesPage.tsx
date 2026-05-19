@@ -134,25 +134,25 @@ export default function WorkCodesPage() {
   return (
     <div>
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
-      <div className="page-header flex items-center justify-between">
+      <div className="page-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="page-title">{pageTitles.workCodes.title}</h1>
           <p className="page-subtitle">{pageTitles.workCodes.subtitle}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="mobile-action-grid">
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2"><Upload size={16} /> {actionLabels.import}</Button>
           <Button variant="outline" onClick={() => exportWorkCodes(workCodes)} className="gap-2"><Download size={16} /> {actionLabels.export}</Button>
           <Button onClick={openCreate} className="gap-2"><Plus size={16} /> {actionLabels.add}</Button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="mobile-filter-grid mb-4">
+        <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder={filterLabels.searchCode} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={filterCat} onValueChange={setFilterCat}>
-          <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full lg:w-[190px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{filterLabels.allCategories}</SelectItem>
             {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
@@ -160,14 +160,14 @@ export default function WorkCodesPage() {
         </Select>
       </div>
 
-      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.code}</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.name}</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.category}</th>
-              <th className="text-right px-4 py-3 font-medium text-muted-foreground">{fieldLabels.actions}</th>
+              <th className="sticky right-0 bg-muted/50 text-right px-4 py-3 font-medium text-muted-foreground shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">{fieldLabels.actions}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -176,7 +176,7 @@ export default function WorkCodesPage() {
                 <td className="px-4 py-3 font-mono text-xs font-semibold">{wc.code}</td>
                 <td className="px-4 py-3 font-medium">{wc.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{wc.category}</td>
-                <td className="px-4 py-3 text-right">
+                <td className="sticky right-0 bg-card px-4 py-3 text-right shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(wc)}><Edit2 size={15} /></Button>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(wc.id)}><Trash2 size={15} className="text-destructive" /></Button>
                 </td>
@@ -193,12 +193,12 @@ export default function WorkCodesPage() {
             <h2 className="font-semibold">施工区域 Area 管理</h2>
             <p className="text-sm text-muted-foreground">管理员维护一级 Area；工长填写日志时再输入二级具体位置。</p>
           </div>
-          <div className="flex gap-2">
+          <div className="mobile-action-grid md:flex md:w-auto">
             <Input
               value={areaInput}
               onChange={e => setAreaInput(e.target.value)}
               placeholder="e.g. Area A / A区"
-              className="w-[240px]"
+              className="w-full md:w-[240px]"
             />
             <Button onClick={handleAreaSave} className="gap-1">
               <Plus size={15} /> {editingAreaId ? actionLabels.save : actionLabels.add}

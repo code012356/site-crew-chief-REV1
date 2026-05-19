@@ -120,7 +120,7 @@ export default function ForemanTeamPage() {
 
       {/* Workers Section */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-primary" />
             <h2 className="text-lg font-semibold">班组工人 Team Workers</h2>
@@ -129,8 +129,8 @@ export default function ForemanTeamPage() {
           <span className="text-xs text-muted-foreground">工人分配由管理员管理 Worker assignment managed by admin</span>
         </div>
 
-        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.laborId}</th>
@@ -138,7 +138,7 @@ export default function ForemanTeamPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.specialty}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.phone}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.status}</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">{fieldLabels.actions}</th>
+                <th className="sticky right-0 bg-muted/50 text-right px-4 py-3 font-medium text-muted-foreground shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">{fieldLabels.actions}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -150,7 +150,7 @@ export default function ForemanTeamPage() {
                   <td className="px-4 py-3 font-mono text-xs">{w.phone}</td>
                   <td className="px-4 py-3">
                     <Select value={w.status} onValueChange={(v) => handleUpdateWorkerStatus(w.id, v as PersonnelStatus)}>
-                      <SelectTrigger className="w-[140px] h-8 text-xs">
+                      <SelectTrigger className="h-8 w-full min-w-[140px] text-xs">
                         <div className="flex items-center gap-1.5">
                           {statusIcons[w.status]}
                           <SelectValue />
@@ -162,7 +162,7 @@ export default function ForemanTeamPage() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="sticky right-0 bg-card px-4 py-3 text-right shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
                     <Button variant="ghost" size="icon" onClick={() => openEditWorker(w)} title={actionLabels.edit}>
                       <Edit2 size={15} />
                     </Button>
@@ -184,7 +184,7 @@ export default function ForemanTeamPage() {
 
       {/* Equipment Section */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Wrench size={18} className="text-primary" />
             <h2 className="text-lg font-semibold">班组设备 Team Equipment</h2>
