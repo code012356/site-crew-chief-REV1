@@ -19,7 +19,7 @@ const statusIcons: Record<PersonnelStatus, React.ReactNode> = {
 
 export default function EngineerManagePage() {
   const { currentPersonnelId } = useAppContext();
-  const { personnel, equipment, teamAssignments, getEngineerForemen, updatePersonnel, addPersonnel, deletePersonnel: dbDeletePersonnel, addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment, updateTeamAssignment, setTeamAssignmentsBatch } = useDataContext();
+  const { personnel, equipment, teamAssignments, workAreas, getEngineerForemen, updatePersonnel, addPersonnel, deletePersonnel: dbDeletePersonnel, addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment, updateTeamAssignment, setTeamAssignmentsBatch } = useDataContext();
   
   const engineerId = currentPersonnelId;
   const managedForemanIds = getEngineerForemen(engineerId);
@@ -124,6 +124,17 @@ export default function EngineerManagePage() {
   const managedEquipment = useMemo(() => {
     return equipment.filter(eq => managedEquipmentIds.has(eq.id));
   }, [equipment, managedEquipmentIds]);
+  const locationOptions = useMemo(() => workAreas.map(area => area.name).sort(), [workAreas]);
+
+  const renderLocationSelect = (value: string, onChange: (value: string) => void) => (
+    <Select value={value || 'none'} onValueChange={next => onChange(next === 'none' ? '' : next)}>
+      <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
+        {locationOptions.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <div>
@@ -398,7 +409,10 @@ export default function EngineerManagePage() {
             <div><Label>{fieldLabels.equipmentNo}</Label><Input value={eqForm.equipmentNo} disabled className="opacity-60" /></div>
             <div><Label>{fieldLabels.equipmentName}</Label><Input value={eqForm.name} disabled className="opacity-60" /></div>
             <div><Label>{fieldLabels.model}</Label><Input value={eqForm.model} disabled className="opacity-60" /></div>
-            <div><Label>{fieldLabels.location}</Label><Input value={eqForm.location} onChange={e => setEqForm(f => ({ ...f, location: e.target.value }))} /></div>
+            <div>
+              <Label>{fieldLabels.location}</Label>
+              {renderLocationSelect(eqForm.location, location => setEqForm(f => ({ ...f, location })))}
+            </div>
             <div>
               <Label>{fieldLabels.status}</Label>
               <Select value={eqForm.status} onValueChange={v => setEqForm(f => ({ ...f, status: v as EquipmentStatus }))}>

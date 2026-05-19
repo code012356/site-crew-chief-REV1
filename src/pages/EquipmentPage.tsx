@@ -22,7 +22,7 @@ const formatUsageArea = (entry: { area: string; areaDetail?: string }) => [entry
 export default function EquipmentPage() {
   const { currentRole, currentPersonnelId, currentUserName } = useAppContext();
   const {
-    equipment, personnel, teamAssignments, engineerAssignments,
+    equipment, personnel, teamAssignments, engineerAssignments, workAreas,
     addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment,
     updateTeamAssignment, equipmentRequests, addEquipmentRequest, updateEquipmentRequest, deleteEquipmentRequest,
     addEquipmentToTeam, dailyLogs,
@@ -31,6 +31,7 @@ export default function EquipmentPage() {
   const isEquipmentManager = currentRole === 'equipment_admin';
   const foremen = personnel.filter(p => p.role === 'foreman' && p.status !== 'resigned');
   const availableEquipment = equipment.filter(e => e.status !== 'retired');
+  const locationOptions = useMemo(() => workAreas.map(area => area.name).sort(), [workAreas]);
 
   // Find engineer for a foreman (if any)
   const getEngineerForForeman = (foremanId: string) => {
@@ -474,6 +475,16 @@ export default function EquipmentPage() {
     </div>
   );
 
+  const renderLocationSelect = (value: string, onChange: (value: string) => void) => (
+    <Select value={value || 'none'} onValueChange={next => onChange(next === 'none' ? '' : next)}>
+      <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
+        {locationOptions.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+
   // ── Shared request dialog ──
   const renderRequestDialog = () => (
     <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
@@ -608,7 +619,10 @@ export default function EquipmentPage() {
                 <div><Label>{fieldLabels.equipmentName}</Label><Input value={newEqForm.name} onChange={e => setNewEqForm(f => ({ ...f, name: e.target.value }))} /></div>
                 <div><Label>{fieldLabels.equipmentNo}</Label><Input placeholder="e.g. EQ-2024-007" value={newEqForm.equipmentNo} onChange={e => setNewEqForm(f => ({ ...f, equipmentNo: e.target.value }))} /></div>
                 <div><Label>{fieldLabels.model}</Label><Input value={newEqForm.model} onChange={e => setNewEqForm(f => ({ ...f, model: e.target.value }))} /></div>
-                <div><Label>{fieldLabels.location}</Label><Input value={newEqForm.location} onChange={e => setNewEqForm(f => ({ ...f, location: e.target.value }))} /></div>
+                <div>
+                  <Label>{fieldLabels.location}</Label>
+                  {renderLocationSelect(newEqForm.location, location => setNewEqForm(f => ({ ...f, location })))}
+                </div>
               </div>
             ) : selectedRequest.requesterRole === 'foreman' ? (
               <div className="rounded-md border p-3 bg-primary/5 text-sm">
@@ -790,7 +804,10 @@ export default function EquipmentPage() {
               <div><Label>{fieldLabels.equipmentNo}</Label><Input placeholder="e.g. EQ-2024-007" value={form.equipmentNo} onChange={e => setForm(f => ({ ...f, equipmentNo: e.target.value }))} /></div>
               <div><Label>{fieldLabels.equipmentName}</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
               <div><Label>{fieldLabels.model}</Label><Input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} /></div>
-              <div><Label>{fieldLabels.location}</Label><Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} /></div>
+              <div>
+                <Label>{fieldLabels.location}</Label>
+                {renderLocationSelect(form.location, location => setForm(f => ({ ...f, location })))}
+              </div>
               <div>
                 <Label>{fieldLabels.status}</Label>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as EquipmentStatus }))}>

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Download, Edit2, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { useDataContext } from '@/contexts/DataContext';
 import { WorkCode } from '@/lib/types';
@@ -18,6 +18,7 @@ type WorkCodeForm = {
 };
 
 const emptyForm: WorkCodeForm = { code: '', name: '', category: '' };
+const PAGE_SIZE = 5;
 
 export default function WorkCodesPage() {
   const { workCodes, workAreas, addWorkCode, updateWorkCode, deleteWorkCode, addWorkArea, updateWorkArea, deleteWorkArea } = useDataContext();
@@ -28,17 +29,23 @@ export default function WorkCodesPage() {
   const [form, setForm] = useState<WorkCodeForm>(emptyForm);
   const [areaInput, setAreaInput] = useState('');
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = Array.from(new Set(workCodes.map(wc => wc.category).filter(Boolean))).sort();
 
-  const filtered = workCodes.filter(wc => {
+  const filtered = useMemo(() => workCodes.filter(wc => {
     const q = search.trim().toLowerCase();
     const hay = `${wc.code} ${wc.name} ${wc.category}`.toLowerCase();
     if (q && !hay.includes(q)) return false;
     if (filterCat !== 'all' && wc.category !== filterCat) return false;
     return true;
-  });
+  }), [filterCat, search, workCodes]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedWorkCodes = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageStart = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
   const openCreate = () => {
     setEditing(null);
@@ -149,9 +156,9 @@ export default function WorkCodesPage() {
       <div className="mobile-filter-grid mb-4">
         <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder={filterLabels.searchCode} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder={filterLabels.searchCode} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
         </div>
-        <Select value={filterCat} onValueChange={setFilterCat}>
+        <Select value={filterCat} onValueChange={value => { setFilterCat(value); setPage(1); }}>
           <SelectTrigger className="w-full lg:w-[190px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{filterLabels.allCategories}</SelectItem>
@@ -171,7 +178,7 @@ export default function WorkCodesPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.map(wc => (
+            {pagedWorkCodes.map(wc => (
               <tr key={wc.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs font-semibold">{wc.code}</td>
                 <td className="px-4 py-3 font-medium">{wc.name}</td>
@@ -184,6 +191,20 @@ export default function WorkCodesPage() {
             ))}
           </tbody>
         </table>
+        {filtered.length > PAGE_SIZE && (
+          <div className="flex flex-col gap-2 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>显示 {pageStart}-{pageEnd} / {filtered.length} Showing {pageStart}-{pageEnd} of {filtered.length}</span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}>
+                上一页 Prev
+              </Button>
+              <span className="min-w-16 text-center">第 {safePage} / {totalPages} 页</span>
+              <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}>
+                下一页 Next
+              </Button>
+            </div>
+          </div>
+        )}
         {filtered.length === 0 && <div className="px-4 py-12 text-center text-muted-foreground">{messages.noMatch}</div>}
       </div>
 
