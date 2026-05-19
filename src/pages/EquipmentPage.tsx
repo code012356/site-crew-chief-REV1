@@ -24,12 +24,19 @@ export default function EquipmentPage() {
   const {
     equipment, personnel, teamAssignments, engineerAssignments, workAreas,
     addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment,
-    updateTeamAssignment, equipmentRequests, addEquipmentRequest, updateEquipmentRequest, deleteEquipmentRequest,
+    updateTeamAssignment, setTeamAssignmentsBatch, equipmentRequests, addEquipmentRequest, updateEquipmentRequest, deleteEquipmentRequest,
     addEquipmentToTeam, dailyLogs,
   } = useDataContext();
 
   const isEquipmentManager = currentRole === 'equipment_admin';
+  const [savingEquipment, setSavingEquipment] = useState(false);
+  const [foremanSearch, setForemanSearch] = useState('');
   const foremen = personnel.filter(p => p.role === 'foreman' && p.status !== 'resigned');
+  const filteredForemen = useMemo(() => {
+    const q = foremanSearch.trim().toLowerCase();
+    if (!q) return foremen;
+    return foremen.filter(fm => `${fm.laborId || ''} ${fm.name} ${fm.phone || ''}`.toLowerCase().includes(q));
+  }, [foremen, foremanSearch]);
   const availableEquipment = equipment.filter(e => e.status !== 'retired');
   const locationOptions = useMemo(() => workAreas.map(area => area.name).sort(), [workAreas]);
 
@@ -82,7 +89,10 @@ export default function EquipmentPage() {
   const getAssignedForemen = (eqId: string) => teamAssignments.filter(a => a.equipmentIds.includes(eqId));
   const getAssignedForemanIds = (eqId: string) => getAssignedForemen(eqId).map(a => a.foremanId);
   const getAssignedForemanNames = (eqId: string) => getAssignedForemen(eqId)
-    .map(a => personnel.find(p => p.id === a.foremanId)?.name)
+    .map(a => {
+      const fm = personnel.find(p => p.id === a.foremanId);
+      return fm?.laborId || fm?.name;
+    })
     .filter(Boolean) as string[];
 
   const getEngineerForEquipment = (eqId: string) => {
@@ -97,9 +107,10 @@ export default function EquipmentPage() {
   };
 
   // ── Admin CRUD handlers ──
-  const openCreate = () => { setEditing(null); setForm({ name: '', equipmentNo: '', model: '', status: 'available', location: '', assignedForemanIds: [] }); setDialogOpen(true); };
+  const openCreate = () => { setEditing(null); setForemanSearch(''); setForm({ name: '', equipmentNo: '', model: '', status: 'available', location: '', assignedForemanIds: [] }); setDialogOpen(true); };
   const openEdit = (e: Equipment) => {
     setEditing(e);
+    setForemanSearch('');
     setForm({ name: e.name, equipmentNo: e.equipmentNo || '', model: e.model, status: e.status, location: e.location || '', assignedForemanIds: getAssignedForemanIds(e.id) });
     setDialogOpen(true);
   };
@@ -120,22 +131,29 @@ export default function EquipmentPage() {
         next.push({ foremanId, workerIds: [], equipmentIds: [equipmentId] });
       }
     }
-    for (const assignment of next) {
-      await updateTeamAssignment(assignment.foremanId, assignment.workerIds, assignment.equipmentIds);
-    }
+    await setTeamAssignmentsBatch(next);
   };
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error(messages.fillComplete); return; }
-    if (editing) {
-      await dbUpdateEquipment(editing.id, { name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
-      await setEquipmentTeams(editing.id, form.assignedForemanIds);
-    } else {
-      const newEquipmentId = await dbAddEquipment({ name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
-      await setEquipmentTeams(newEquipmentId, form.assignedForemanIds);
+    if (savingEquipment) return;
+    setSavingEquipment(true);
+    try {
+      if (editing) {
+        await dbUpdateEquipment(editing.id, { name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
+        await setEquipmentTeams(editing.id, form.assignedForemanIds);
+      } else {
+        const newEquipmentId = await dbAddEquipment({ name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
+        await setEquipmentTeams(newEquipmentId, form.assignedForemanIds);
+      }
+      toast.success(messages.saved);
+      setDialogOpen(false);
+    } catch (error) {
+      console.error('Save equipment failed', error);
+      toast.error('保存失败，请重试 Save failed, please retry');
+    } finally {
+      setSavingEquipment(false);
     }
-    toast.success(messages.saved);
-    setDialogOpen(false);
   };
 
   const normalizeTeamName = (value: string) => value
@@ -846,7 +864,7 @@ export default function EquipmentPage() {
         </Tabs>
 
         {/* Admin edit/create dialog */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={open => { if (!savingEquipment) setDialogOpen(open); }}>
           <DialogContent>
             <DialogHeader><DialogTitle>{editing ? '编辑设备 Edit Equipment' : '添加设备 Add Equipment'}</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
@@ -871,11 +889,18 @@ export default function EquipmentPage() {
               </div>
               <div>
                 <Label>{fieldLabels.assignedTeam}</Label>
+                <Input
+                  value={foremanSearch}
+                  onChange={e => setForemanSearch(e.target.value)}
+                  placeholder="搜索工长劳工号/姓名/电话 Search foreman"
+                  className="mt-1"
+                />
                 <div className="mt-1 max-h-44 overflow-y-auto rounded-md border p-2 space-y-1">
-                  {foremen.map(fm => (
+                  {filteredForemen.map(fm => (
                     <label key={fm.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/40">
                       <Checkbox
                         checked={form.assignedForemanIds.includes(fm.id)}
+                        disabled={savingEquipment}
                         onCheckedChange={checked => setForm(f => ({
                           ...f,
                           assignedForemanIds: checked
@@ -887,7 +912,7 @@ export default function EquipmentPage() {
                       {fm.laborId && <span className="font-mono text-xs text-muted-foreground">{fm.laborId}</span>}
                     </label>
                   ))}
-                  {foremen.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">{fieldLabels.unassigned}</p>}
+                  {filteredForemen.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">没有匹配班组 No matching team</p>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   已选 {form.assignedForemanIds.length} 个班组，多个班组即为共享设备。
@@ -895,8 +920,8 @@ export default function EquipmentPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>{actionLabels.cancel}</Button>
-              <Button onClick={handleSave}>{editing ? actionLabels.save : actionLabels.add}</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={savingEquipment}>{actionLabels.cancel}</Button>
+              <Button onClick={handleSave} disabled={savingEquipment}>{savingEquipment ? '保存中 Saving...' : (editing ? actionLabels.save : actionLabels.add)}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
