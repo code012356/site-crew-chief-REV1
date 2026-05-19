@@ -81,9 +81,9 @@ function TimePeriodSelector({
   periods: string[];
 }) {
   return (
-    <div className="flex items-center gap-2 mb-3">
+    <div className="grid grid-cols-1 gap-2 mb-3 sm:grid-cols-2">
       <Select value={granularity} onValueChange={v => { setGranularity(v as TimeGranularity); setPeriod('all'); }}>
-        <SelectTrigger className="w-[120px] h-8 text-xs">
+        <SelectTrigger className="h-8 w-full text-xs sm:w-[120px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -94,7 +94,7 @@ function TimePeriodSelector({
         </SelectContent>
       </Select>
       <Select value={period} onValueChange={setPeriod}>
-        <SelectTrigger className="w-[160px] h-8 text-xs">
+        <SelectTrigger className="h-8 w-full text-xs sm:w-[160px]">
           <SelectValue placeholder="选择时段 Period" />
         </SelectTrigger>
         <SelectContent>
@@ -388,8 +388,8 @@ function EngineerAnalytics() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 flex-1 mr-4">
+      <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 flex-1 sm:mr-4">
           <StatCard label="管理工长 Managed Foremen" value={foremen.length} unit="" />
           <StatCard label="全部设备 All Equipment" value={equipment.length} unit="" />
           <StatCard label="筛选日志 Filtered Logs" value={filteredLogs.length} unit="" />
@@ -397,7 +397,7 @@ function EngineerAnalytics() {
       </div>
 
       <div className="bg-card rounded-lg border shadow-sm p-4 mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <span className="text-sm font-medium text-muted-foreground">数据范围 Data Range：</span>
           <TimePeriodSelector granularity={granularity} setGranularity={setGranularity} period={period} setPeriod={setPeriod} periods={periods} />
         </div>
@@ -524,9 +524,9 @@ function AdminAnalytics() {
         <StatCard label="闲置设备 Idle Equipment" value={idleEquipment} unit="" highlight={idleEquipment > 0} />
       </div>
 
-      <div className="bg-card rounded-lg border shadow-sm overflow-hidden mb-6">
+      <div className="bg-card rounded-lg border shadow-sm overflow-x-auto mb-6">
         <div className="px-5 py-3 border-b bg-muted/50"><h3 className="font-semibold text-sm">工长数据汇总 Foreman Summary</h3></div>
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b bg-muted/30">
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">工长 Foreman</th>

@@ -606,7 +606,7 @@ export default function PersonnelPage() {
           <h1 className="page-title">{pageTitles.personnel.title}</h1>
           <p className="page-subtitle">{pageTitles.personnel.subtitle}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="mobile-action-grid">
           {undoStack.length > 0 && (
             <Button variant="outline" onClick={handleUndo} className="gap-2 text-amber-600 hover:text-amber-700">
               <Undo2 size={16} /> 撤销 Undo
@@ -619,13 +619,13 @@ export default function PersonnelPage() {
       </div>
 
       {/* Primary filter */}
-      <div className="flex flex-wrap gap-3 mb-3">
-        <div className="relative flex-1 min-w-[180px]">
+      <div className="mobile-filter-grid mb-3">
+        <div className="relative flex-1 min-w-0 sm:min-w-[180px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="搜索姓名/工号 Search name/ID..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={filterRole} onValueChange={v => { setFilterRole(v); setFilterForeman('all'); setFilterEngineer('all'); setSelectedIds(new Set()); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full lg:w-[140px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{filterLabels.allRoles}</SelectItem>
             <SelectItem value="worker">{roleLabels.worker}</SelectItem>
@@ -641,10 +641,10 @@ export default function PersonnelPage() {
       </div>
 
       {/* Secondary hierarchical filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="mobile-filter-grid mb-4">
         {showForemanFilter && (
           <Select value={filterForeman} onValueChange={setFilterForeman}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="所属工长 Foreman" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[160px]"><SelectValue placeholder="所属工长 Foreman" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部工长 All Foremen</SelectItem>
               <SelectItem value="none">未分配 Unassigned</SelectItem>
@@ -656,7 +656,7 @@ export default function PersonnelPage() {
         )}
         {showEngineerFilter && (
           <Select value={filterEngineer} onValueChange={setFilterEngineer}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="所属工程师 Engineer" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[160px]"><SelectValue placeholder="所属工程师 Engineer" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部工程师 All Engineers</SelectItem>
               {engineers.map(eng => (
@@ -667,7 +667,7 @@ export default function PersonnelPage() {
         )}
         {specialtyOptions.length > 0 && (
           <Select value={filterSpecialty} onValueChange={setFilterSpecialty}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="工种 Specialty" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[150px]"><SelectValue placeholder="工种 Specialty" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部工种 All</SelectItem>
               {specialtyOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -676,7 +676,7 @@ export default function PersonnelPage() {
         )}
         {nationalityOptions.length > 0 && (
           <Select value={filterNationality} onValueChange={setFilterNationality}>
-            <SelectTrigger className="w-[140px]"><SelectValue placeholder="国籍 Nationality" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[140px]"><SelectValue placeholder="国籍 Nationality" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部国籍 All</SelectItem>
               {nationalityOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
@@ -685,7 +685,7 @@ export default function PersonnelPage() {
         )}
         {workLineOptions.length > 0 && (
           <Select value={filterWorkLine} onValueChange={setFilterWorkLine}>
-            <SelectTrigger className="w-[140px]"><SelectValue placeholder="一线/二线" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[140px]"><SelectValue placeholder="一线/二线" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部线别 All</SelectItem>
               {workLineOptions.map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}
@@ -694,7 +694,7 @@ export default function PersonnelPage() {
         )}
         {projectDeptOptions.length > 0 && (
           <Select value={filterProjectDept} onValueChange={setFilterProjectDept}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="项目/部门" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[160px]"><SelectValue placeholder="项目/部门" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部项目 All Depts</SelectItem>
               {projectDeptOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -705,7 +705,7 @@ export default function PersonnelPage() {
 
       {/* Batch action bar */}
       {someBatchableSelected && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+        <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <span className="text-sm font-medium">已选 Selected {selectedBatchable.length} 人</span>
           {selectedBatchable.some(p => p.role === 'worker') && (
             <Button variant="outline" size="sm" onClick={() => { setBatchTargetForeman('none'); setBatchReassignOpen(true); }} className="gap-1.5">
@@ -761,7 +761,7 @@ export default function PersonnelPage() {
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.passportNo}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.visaExpiryDate}</th>
               <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.joinDate}</th>
-              <th className="text-right px-3 py-3 font-medium text-muted-foreground text-xs">{fieldLabels.actions}</th>
+              <th className="sticky right-0 bg-muted/50 text-right px-3 py-3 font-medium text-muted-foreground text-xs shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">{fieldLabels.actions}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -825,7 +825,7 @@ export default function PersonnelPage() {
                   <td className="px-3 py-2 text-xs max-w-[120px] truncate" title={p.passportNo}>{p.passportNo || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.visaExpiryDate || '-'}</td>
                   <td className="px-3 py-2 text-xs">{p.joinDate || '-'}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                  <td className="sticky right-0 bg-card px-3 py-2 text-right whitespace-nowrap shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}><Edit2 size={14} /></Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(p.id)}><Trash2 size={14} className="text-destructive" /></Button>
                   </td>
@@ -840,7 +840,7 @@ export default function PersonnelPage() {
         <div>
           Showing {filtered.length === 0 ? 0 : pageStart + 1}-{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <span>Rows</span>
           <Select value={String(pageSize)} onValueChange={value => setPageSize(Number(value))}>
             <SelectTrigger className="w-[90px] h-9"><SelectValue /></SelectTrigger>

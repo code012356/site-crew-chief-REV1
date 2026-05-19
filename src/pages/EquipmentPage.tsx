@@ -665,7 +665,7 @@ export default function EquipmentPage() {
             <h1 className="page-title">{pageTitles.equipment.title}</h1>
             <p className="page-subtitle">{pageTitles.equipment.subtitle}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="mobile-action-grid">
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2"><Upload size={16} /> {actionLabels.import}</Button>
             <Button variant="outline" size="sm" onClick={() => exportEquipment(equipment)} className="gap-2"><Download size={16} /> {actionLabels.export}</Button>
             <Button size="sm" onClick={openCreate} className="gap-2"><Plus size={16} /> {actionLabels.add}</Button>
@@ -673,7 +673,7 @@ export default function EquipmentPage() {
         </div>
 
         <Tabs defaultValue="list" className="mb-6">
-          <TabsList>
+          <TabsList className="w-full sm:w-auto">
             <TabsTrigger value="list">设备列表 Equipment List</TabsTrigger>
             <TabsTrigger value="requests" className="relative">
               设备申请 Requests
@@ -753,13 +753,13 @@ export default function EquipmentPage() {
             <h1 className="page-title">{pageTitles.equipment.title}</h1>
             <p className="page-subtitle">查看设备情况，审批工长申请，提交自己的申请 View equipment, review foreman requests, submit own requests</p>
           </div>
-          <Button size="sm" onClick={() => openRequestDialog()} className="gap-2">
+          <Button size="sm" onClick={() => openRequestDialog()} className="w-full gap-2 sm:w-auto">
             <Send size={16} /> {actionLabels.requestEquipment}
           </Button>
         </div>
 
         <Tabs defaultValue="list" className="mb-6">
-          <TabsList>
+          <TabsList className="w-full sm:w-auto">
             <TabsTrigger value="list">设备列表 Equipment List</TabsTrigger>
             <TabsTrigger value="review" className="relative">
               工长申请审批 Foreman Requests
@@ -810,13 +810,13 @@ export default function EquipmentPage() {
           <h1 className="page-title">{pageTitles.equipment.title}</h1>
           <p className="page-subtitle">查看设备情况并申请分配 View equipment and request allocation</p>
         </div>
-        <Button size="sm" onClick={() => openRequestDialog()} className="gap-2">
+        <Button size="sm" onClick={() => openRequestDialog()} className="w-full gap-2 sm:w-auto">
           <Send size={16} /> {actionLabels.requestEquipment}
         </Button>
       </div>
 
       <Tabs defaultValue="list" className="mb-6">
-        <TabsList>
+        <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="list">设备列表 Equipment List</TabsTrigger>
           <TabsTrigger value="myRequests">我的申请 My Requests ({myRequests.length})</TabsTrigger>
         </TabsList>

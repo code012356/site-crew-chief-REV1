@@ -37,10 +37,10 @@ function HalfHourDateTimePicker({ value, onChange }: { value: string; onChange: 
   const setTime = (time: string) => onChange(`${current.date}T${time}`);
 
   return (
-    <div className="grid grid-cols-[1.35fr_0.9fr] gap-1">
-      <Input type="date" value={current.date} onChange={e => setDate(e.target.value)} className="h-9 text-xs" />
+    <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-2 sm:grid-cols-[1.35fr_0.9fr]">
+      <Input type="date" value={current.date} onChange={e => setDate(e.target.value)} className="h-9 min-w-0 text-xs" />
       <Select value={current.time} onValueChange={setTime}>
-        <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-9 min-w-0 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent className="max-h-64">
           {HALF_HOUR_TIMES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
         </SelectContent>
@@ -432,7 +432,7 @@ export default function DailyLogPage() {
           <h1 className="page-title">施工日志 Daily Log</h1>
           <p className="page-subtitle">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="mobile-action-grid">
           {isAdmin && (
             <Button variant="outline" onClick={() => exportDailyLogs(logs, personnel)} className="gap-2">
               <Download size={16} /> 导出Excel Export Excel
@@ -475,14 +475,14 @@ export default function DailyLogPage() {
 
       {/* Filters for admin and engineer */}
       {!isForeman && !showTrash && (
-        <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-card rounded-lg border">
+        <div className="mobile-filter-grid items-end mb-4 p-4 bg-card rounded-lg border">
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Filter size={14} /> 筛选 Filter
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">工长 Foreman</Label>
             <Select value={filterForemanId} onValueChange={setFilterForemanId}>
-              <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full lg:w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部工长 All Foremen</SelectItem>
                 {foremanOptions.map(([id, label]) => (
@@ -494,7 +494,7 @@ export default function DailyLogPage() {
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">状态 Status</Label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full lg:w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部状态 All Status</SelectItem>
                 <SelectItem value="pending">待审核 Pending</SelectItem>
@@ -510,7 +510,7 @@ export default function DailyLogPage() {
             <Label className="text-xs text-muted-foreground">起始日期 From</Label>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-9 w-[150px] justify-start text-left font-normal text-sm", !filterDateFrom && "text-muted-foreground")}>
+                <Button variant="outline" className={cn("h-9 w-full justify-start text-left font-normal text-sm lg:w-[150px]", !filterDateFrom && "text-muted-foreground")}>
                   <CalendarIcon size={14} className="mr-1.5" />
                   {filterDateFrom ? format(filterDateFrom, 'yyyy-MM-dd') : '不限 Any'}
                 </Button>
@@ -524,7 +524,7 @@ export default function DailyLogPage() {
             <Label className="text-xs text-muted-foreground">截止日期 To</Label>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-9 w-[150px] justify-start text-left font-normal text-sm", !filterDateTo && "text-muted-foreground")}>
+                <Button variant="outline" className={cn("h-9 w-full justify-start text-left font-normal text-sm lg:w-[150px]", !filterDateTo && "text-muted-foreground")}>
                   <CalendarIcon size={14} className="mr-1.5" />
                   {filterDateTo ? format(filterDateTo, 'yyyy-MM-dd') : '不限 Any'}
                 </Button>
@@ -544,14 +544,14 @@ export default function DailyLogPage() {
       )}
 
       {isForeman && !showTrash && (
-        <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-card rounded-lg border">
+        <div className="mobile-filter-grid items-end mb-4 p-3 bg-card rounded-lg border">
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Filter size={14} /> 筛选 Filter
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">状态 Status</Label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full lg:w-[200px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部状态 All Status</SelectItem>
                 <SelectItem value="pending">待审核 Pending</SelectItem>
@@ -631,10 +631,10 @@ export default function DailyLogPage() {
 
       {/* Form - foreman only */}
       {isForeman && showForm && (
-        <div className="bg-card rounded-lg border shadow-sm p-5 mb-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-lg">
+        <div className="bg-card rounded-lg border shadow-sm p-3 mb-6 space-y-6 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-lg leading-snug break-words">
                 {editingLogId ? '修改施工日志 Revise Log' : '今日施工日志 Today\'s Log'} · {editingLogId ? logs.find(l => l.id === editingLogId)?.date : todayLocal()}
               </h2>
               {editingLogId && (
@@ -646,9 +646,9 @@ export default function DailyLogPage() {
 
           {/* Worker entries */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
               <Label className="text-sm font-semibold">工人工时记录 Worker Hours</Label>
-              <div className="flex items-center gap-2">
+              <div className="mobile-action-grid sm:justify-end">
                 {selectedEntryIdx.size > 0 && (
                   <>
                     <span className="text-xs text-muted-foreground">已选 {selectedEntryIdx.size} Selected</span>
@@ -666,8 +666,8 @@ export default function DailyLogPage() {
             <div className="space-y-4">
               {entries.map((entry, i) => (
                 <div key={i} className="space-y-2 p-3 rounded-lg border bg-muted/10">
-                  <div className="grid grid-cols-2 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] gap-2 items-end">
-                    <div className="flex items-center justify-center h-9">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] md:gap-2 md:items-end">
+                    <div className="flex h-9 items-center justify-start sm:justify-center">
                       <Checkbox checked={selectedEntryIdx.has(i)} onCheckedChange={() => toggleEntrySel(i)} />
                     </div>
                     <div>
@@ -698,7 +698,7 @@ export default function DailyLogPage() {
                         <SelectContent>{areaNames.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-9" onClick={() => setEntries(prev => prev.filter((_, idx) => idx !== i))}>
+                    <Button variant="ghost" size="icon" className="h-9 w-full justify-start text-destructive sm:w-9 sm:justify-center md:w-9" onClick={() => setEntries(prev => prev.filter((_, idx) => idx !== i))}>
                       <Trash2 size={14} className="text-destructive" />
                     </Button>
                   </div>
@@ -737,9 +737,9 @@ export default function DailyLogPage() {
 
           {/* Equipment entries */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
               <Label className="text-sm font-semibold">设备使用记录 Equipment Usage</Label>
-              <div className="flex items-center gap-2">
+              <div className="mobile-action-grid sm:justify-end">
                 {selectedEqIdx.size > 0 && (
                   <>
                     <span className="text-xs text-muted-foreground">已选 {selectedEqIdx.size} Selected</span>
@@ -757,8 +757,8 @@ export default function DailyLogPage() {
             <div className="space-y-3">
               {eqEntries.map((entry, i) => (
                 <div key={i} className="space-y-2 p-3 rounded-lg border bg-muted/10">
-                  <div className="grid grid-cols-2 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] gap-2 items-end">
-                    <div className="flex items-center justify-center h-9">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] md:gap-2 md:items-end">
+                    <div className="flex h-9 items-center justify-start sm:justify-center">
                       <Checkbox checked={selectedEqIdx.has(i)} onCheckedChange={() => toggleEqSel(i)} />
                     </div>
                     <div>
@@ -789,7 +789,7 @@ export default function DailyLogPage() {
                         <SelectContent>{areaNames.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-9" onClick={() => setEqEntries(prev => prev.filter((_, idx) => idx !== i))}>
+                    <Button variant="ghost" size="icon" className="h-9 w-full justify-start text-destructive sm:w-9 sm:justify-center md:w-9" onClick={() => setEqEntries(prev => prev.filter((_, idx) => idx !== i))}>
                       <Trash2 size={14} className="text-destructive" />
                     </Button>
                   </div>

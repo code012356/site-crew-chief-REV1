@@ -136,4 +136,20 @@
   .table-responsive table {
     @apply min-w-[640px];
   }
+
+  .mobile-action-grid {
+    @apply grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap;
+  }
+
+  .mobile-action-grid > * {
+    @apply w-full justify-center sm:w-auto;
+  }
+
+  .mobile-filter-grid {
+    @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap;
+  }
+
+  .mobile-filter-grid > * {
+    @apply w-full lg:w-auto;
+  }
 }

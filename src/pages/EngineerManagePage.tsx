@@ -164,7 +164,7 @@ export default function EngineerManagePage() {
 
       {/* Foremen */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-primary" />
             <h2 className="text-lg font-semibold">工长管理 Foreman Management</h2>
@@ -198,7 +198,7 @@ export default function EngineerManagePage() {
                       <p className="text-xs text-muted-foreground">{fm.phone}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">{workers.length} 工人 Workers · {eqs.length} 设备 Equipment</span>
                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openEditForeman(fm)}><Edit2 size={14} /></Button>
                     <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => deleteForeman(fm.id)}><Trash2 size={14} className="text-destructive" /></Button>
@@ -211,7 +211,7 @@ export default function EngineerManagePage() {
                     {workers.length > 0 ? (
                       <div className="space-y-1.5">
                         {workers.map(w => (
-                          <div key={w.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-muted/30 text-sm">
+                            <div key={w.id} className="flex flex-col gap-2 px-3 py-2 rounded-md bg-muted/30 text-sm sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-xs text-muted-foreground">{w.laborId || '-'}</span>
                               <span className="font-medium">{w.name}</span>
@@ -233,7 +233,7 @@ export default function EngineerManagePage() {
                     {eqs.length > 0 ? (
                       <div className="space-y-1.5">
                         {eqs.map(eq => (
-                          <div key={eq.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-muted/30 text-sm">
+                          <div key={eq.id} className="flex flex-col gap-2 px-3 py-2 rounded-md bg-muted/30 text-sm sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <span className="font-mono text-xs text-muted-foreground mr-2">{eq.equipmentNo || '-'}</span>
                               <span className="font-medium">{eq.name}</span>
@@ -268,7 +268,7 @@ export default function EngineerManagePage() {
 
       {/* Managed Equipment */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Wrench size={18} className="text-primary" />
             <h2 className="text-lg font-semibold">管辖设备 Managed Equipment</h2>
@@ -287,7 +287,7 @@ export default function EngineerManagePage() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.status}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.location}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{fieldLabels.assignedTeam}</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">{fieldLabels.actions}</th>
+                <th className="sticky right-0 bg-muted/50 text-right px-4 py-3 font-medium text-muted-foreground shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">{fieldLabels.actions}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -304,7 +304,7 @@ export default function EngineerManagePage() {
                         await dbUpdateEquipment(eq.id, { status: v as EquipmentStatus });
                         toast.success(`设备状态已更新 Equipment status updated`);
                       }}>
-                        <SelectTrigger className="h-7 w-[130px] text-xs">
+                        <SelectTrigger className="h-7 w-full min-w-[130px] text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -324,7 +324,7 @@ export default function EngineerManagePage() {
                         </Button>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="sticky right-0 bg-card px-4 py-3 text-right shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
                       <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditEq(eq)}>
                         <Edit2 size={12} /> {actionLabels.edit}
                       </Button>

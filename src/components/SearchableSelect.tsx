@@ -45,7 +45,7 @@ export default function SearchableSelect({ options, value, onChange, placeholder
           <ChevronsUpDown size={14} className="ml-2 opacity-50 shrink-0" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[280px]" align="start">
+      <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[280px]" align="start">
         <Command
           filter={(itemValue, search) => {
             // itemValue is the SearchableOption.value (id) — not searchable; rely on keywords

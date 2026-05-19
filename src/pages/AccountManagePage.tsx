@@ -281,7 +281,7 @@ export default function AccountManagePage() {
           <h2 className="text-xl font-bold text-foreground">账号管理 Account Management</h2>
           <p className="text-sm text-muted-foreground">管理系统用户账号，通过手机号关联人员 Manage accounts, link personnel via phone</p>
         </div>
-        <Button onClick={openAdd} size="sm" className="gap-1.5 self-start">
+        <Button onClick={openAdd} size="sm" className="w-full gap-1.5 sm:w-auto sm:self-start">
           <Plus size={16} /> 添加账号 Add Account
         </Button>
       </div>
@@ -292,7 +292,7 @@ export default function AccountManagePage() {
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
             ⚠️ {unlinkedPersonnel.length} 名工长/工程师尚未关联账号 {unlinkedPersonnel.length} foremen/engineers without accounts
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="mobile-action-grid">
             {unlinkedPersonnel.map(p => (
               <Button
                 key={p.id}
@@ -311,7 +311,7 @@ export default function AccountManagePage() {
       )}
 
       <Tabs defaultValue="accounts">
-        <TabsList>
+        <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="accounts">账号列表 Accounts</TabsTrigger>
           <TabsTrigger value="requests" className="relative">
             申请审批 Requests
@@ -335,7 +335,7 @@ export default function AccountManagePage() {
                     <TableHead>工号 Labor ID</TableHead>
                     <TableHead>角色 Role</TableHead>
                     <TableHead>状态 Status</TableHead>
-                    <TableHead className="text-right">操作 Actions</TableHead>
+                    <TableHead className="sticky right-0 bg-muted text-right shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">操作 Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -354,7 +354,7 @@ export default function AccountManagePage() {
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{account.laborId || '-'}</TableCell>
                         <TableCell><Badge variant="outline">{roleLabels[account.role] || account.role}</Badge></TableCell>
-                        <TableCell>
+                        <TableCell className="sticky right-0 bg-card shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
                           <div className="flex items-center gap-2">
                             <Badge variant={account.enabled ? 'default' : 'secondary'}>
                               {account.enabled ? '启用 Enabled' : '禁用 Disabled'}
@@ -403,7 +403,7 @@ export default function AccountManagePage() {
                       <TableHead>申请角色 Role</TableHead>
                       <TableHead>申请原因 Reason</TableHead>
                       <TableHead>时间 Time</TableHead>
-                      <TableHead className="text-right">操作 Actions</TableHead>
+                      <TableHead className="sticky right-0 bg-muted text-right shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">操作 Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -415,7 +415,7 @@ export default function AccountManagePage() {
                         <TableCell><Badge variant="outline">{roleLabels[req.role] || req.role}</Badge></TableCell>
                         <TableCell className="max-w-[200px] truncate">{req.reason || '-'}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{new Date(req.createdAt).toLocaleString('zh-CN')}</TableCell>
-                        <TableCell>
+                        <TableCell className="sticky right-0 bg-card shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => openApprove(req.id)} title="通过 Approve" className="text-primary hover:text-primary">
                               <CheckCircle size={16} />
