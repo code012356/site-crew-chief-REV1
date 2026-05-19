@@ -298,8 +298,6 @@ export function exportDailyLogs(logs: DailyLog[], personnelList?: Personnel[]) {
         '日期 Date': log.date,
         '工人姓名 Worker': entry.workerName,
         '工人工号 Worker ID': getLaborId(entry.workerId, entry.workerName),
-        '开始时间 Start': entry.startTime?.replace('T', ' ') || '',
-        '结束时间 End': entry.endTime?.replace('T', ' ') || '',
         '工时 Hours': entry.hours,
         '施工区域 Area': entry.area,
         '施工代码 Work Code': entry.workCodeName,
@@ -308,15 +306,13 @@ export function exportDailyLogs(logs: DailyLog[], personnelList?: Personnel[]) {
       }))
     );
     const workerSheet = XLSX.utils.json_to_sheet(workerRows);
-    workerSheet['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 10 }, { wch: 18 }, { wch: 20 }, { wch: 28 }, { wch: 18 }];
+    workerSheet['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 18 }, { wch: 20 }, { wch: 28 }, { wch: 18 }];
     XLSX.utils.book_append_sheet(wb, workerSheet, `${sheetLabel}-工时 Hours`);
 
     const equipmentRows = sortedLogs.flatMap(log =>
       log.equipmentUsage.map(entry => ({
         '日期 Date': log.date,
         '设备名称 Equipment': entry.equipmentName,
-        '开始时间 Start': entry.startTime?.replace('T', ' ') || '',
-        '结束时间 End': entry.endTime?.replace('T', ' ') || '',
         '使用时长 Hours': entry.hours,
         '使用区域 Area': entry.area,
         '施工代码 Work Code': entry.workCodeName || '',
@@ -326,7 +322,7 @@ export function exportDailyLogs(logs: DailyLog[], personnelList?: Personnel[]) {
     );
     if (equipmentRows.length > 0) {
       const equipmentSheet = XLSX.utils.json_to_sheet(equipmentRows);
-      equipmentSheet['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 28 }, { wch: 18 }];
+      equipmentSheet['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 28 }, { wch: 18 }];
       XLSX.utils.book_append_sheet(wb, equipmentSheet, `${sheetLabel}-设备 Equip`);
     }
   }

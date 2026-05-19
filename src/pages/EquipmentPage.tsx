@@ -17,7 +17,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { pageTitles, fieldLabels, actionLabels, equipmentStatusLabels, messages } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
 
-const formatLogDateTime = (value: string) => value ? value.replace('T', ' ') : '-';
 const formatUsageArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ') || '-';
 
 export default function EquipmentPage() {
@@ -420,7 +419,7 @@ export default function EquipmentPage() {
           status: log.status,
         };
       }))
-      .sort((a, b) => `${b.date} ${b.entry.startTime}`.localeCompare(`${a.date} ${a.entry.startTime}`));
+      .sort((a, b) => b.date.localeCompare(a.date));
   }, [currentRole, currentPersonnelId, dailyLogs, engineerAssignments, equipment, personnel]);
 
   const requestStatusBadge = (status: string) => {
@@ -490,7 +489,6 @@ export default function EquipmentPage() {
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">日期 Date</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">设备 Equipment</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">工长 Foreman</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">时间 Time</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">时长 Hours</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">区域 Area</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">施工代码 Work Code</th>
@@ -508,9 +506,6 @@ export default function EquipmentPage() {
               <td className="px-4 py-3">
                 <div>{foremanName}</div>
                 <div className="font-mono text-xs text-muted-foreground">{foremanLabel}</div>
-              </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">
-                {formatLogDateTime(entry.startTime)} - {formatLogDateTime(entry.endTime)}
               </td>
               <td className="px-4 py-3 font-medium">{entry.hours}h</td>
               <td className="px-4 py-3 text-muted-foreground">{formatUsageArea(entry)}</td>

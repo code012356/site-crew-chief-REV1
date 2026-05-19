@@ -86,6 +86,23 @@ function withoutLeaveFields<T extends Record<string, any>>(row: T) {
   return fallbackRow;
 }
 
+function stripTimeFields<T extends Record<string, any>>(entry: T) {
+  const { startTime, endTime, ...rest } = entry;
+  return rest;
+}
+
+function stripDailyLogTimeFields(log: Pick<DailyLog, 'entries' | 'equipmentUsage'> & { revisions?: LogRevision[] }) {
+  return {
+    entries: log.entries.map(stripTimeFields),
+    equipmentUsage: log.equipmentUsage.map(stripTimeFields),
+    revisions: log.revisions?.map(revision => ({
+      ...revision,
+      entries: revision.entries.map(stripTimeFields),
+      equipmentUsage: revision.equipmentUsage.map(stripTimeFields),
+    })),
+  };
+}
+
 function toPersonnelDbRow(p: Omit<Personnel, 'id'>) {
   return {
     labor_id: p.laborId || null, code_no: p.codeNo || null,
@@ -626,11 +643,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Daily log CRUD ──
   const addDailyLog = async (log: Omit<DailyLog, 'id'>) => {
+    const sanitized = stripDailyLogTimeFields(log);
     const { error } = await supabase.from('daily_logs').insert({
       date: log.date, foreman_id: log.foremanId, foreman_name: log.foremanName,
       status: log.status, review_comment: log.reviewComment || null,
-      entries: log.entries as any, equipment_usage: log.equipmentUsage as any,
-      revisions: log.revisions as any || null,
+      entries: sanitized.entries as any, equipment_usage: sanitized.equipmentUsage as any,
+      revisions: sanitized.revisions as any || null,
     });
     assertSupabaseOk(error, 'Add daily log');
     await fetchDailyLogs();
@@ -643,9 +661,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.foremanName !== undefined) db.foreman_name = updates.foremanName;
     if (updates.status !== undefined) db.status = updates.status;
     if (updates.reviewComment !== undefined) db.review_comment = updates.reviewComment || null;
-    if (updates.entries !== undefined) db.entries = updates.entries;
-    if (updates.equipmentUsage !== undefined) db.equipment_usage = updates.equipmentUsage;
-    if (updates.revisions !== undefined) db.revisions = updates.revisions;
+    if (updates.entries !== undefined) db.entries = updates.entries.map(stripTimeFields);
+    if (updates.equipmentUsage !== undefined) db.equipment_usage = updates.equipmentUsage.map(stripTimeFields);
+    if (updates.revisions !== undefined) db.revisions = updates.revisions.map(revision => ({
+      ...revision,
+      entries: revision.entries.map(stripTimeFields),
+      equipmentUsage: revision.equipmentUsage.map(stripTimeFields),
+    }));
     if (updates.deletedAt !== undefined) db.deleted_at = updates.deletedAt || null;
     const { error } = await supabase.from('daily_logs').update(db).eq('id', id);
     assertSupabaseOk(error, 'Update daily log');

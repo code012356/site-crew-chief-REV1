@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { useDataContext } from '@/contexts/DataContext';
-import { DailyLog } from '@/lib/types';
+import { DailyLog, DailyLogEntry } from '@/lib/types';
 import { CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronUp, ChevronRight, History, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { logStatusLabels, pageTitles, fieldLabels, actionLabels, messages } from '@/lib/i18n';
 import RevisionHistoryDialog from '@/components/RevisionHistoryDialog';
 
-const formatDT = (dt: string) => dt ? dt.replace('T', ' ') : '-';
 const formatArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ');
 const getWorkerHours = (log: DailyLog) => log.entries.reduce((sum, entry) => sum + entry.hours, 0);
 const getEquipmentHours = (log: DailyLog) => log.equipmentUsage.reduce((sum, entry) => sum + entry.hours, 0);
@@ -31,6 +30,24 @@ export default function ReviewPage() {
   const getWorkerLabel = (workerId: string, fallbackName: string) => {
     const worker = personnel.find(p => p.id === workerId);
     return worker?.laborId || fallbackName;
+  };
+  const groupWorkerEntries = (entries: DailyLogEntry[]) => {
+    const grouped = new Map<string, { id: string; workerId: string; workerName: string; laborId: string; hours: number; entries: DailyLogEntry[] }>();
+    entries.forEach(entry => {
+      const key = entry.workerId || entry.workerName;
+      const existing = grouped.get(key) || {
+        id: key,
+        workerId: entry.workerId,
+        workerName: entry.workerName,
+        laborId: getWorkerLabel(entry.workerId, entry.workerName),
+        hours: 0,
+        entries: [],
+      };
+      existing.hours += entry.hours;
+      existing.entries.push(entry);
+      grouped.set(key, existing);
+    });
+    return Array.from(grouped.values());
   };
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
@@ -115,34 +132,35 @@ export default function ReviewPage() {
       <div>
         <h3 className="text-sm font-semibold mb-2">Worker Entries</h3>
         <div className="space-y-1">
-          {log.entries.map(e => {
-            const isExpanded = expandedEntryId === e.id;
+          {groupWorkerEntries(log.entries).map(workerGroup => {
+            const isExpanded = expandedEntryId === `worker_${workerGroup.id}`;
             return (
-              <div key={e.id} className="rounded-md border overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => toggleEntry(e.id)}>
+              <div key={workerGroup.id} className="rounded-md border overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => toggleEntry(`worker_${workerGroup.id}`)}>
                   <ChevronRight size={14} className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                  <span className="font-mono font-semibold text-sm w-20">{getWorkerLabel(e.workerId, e.workerName)}</span>
-                  <span className="text-sm text-muted-foreground">{formatDT(e.startTime)} - {formatDT(e.endTime)}</span>
-                  <span className="text-sm text-muted-foreground">{e.hours}h</span>
-                  <span className="text-sm text-muted-foreground">{formatArea(e)}</span>
-                  <span className="font-mono text-xs text-muted-foreground ml-auto">{e.workCodeName}</span>
+                  <span className="font-mono font-semibold text-sm w-20">{workerGroup.laborId}</span>
+                  <span className="text-sm text-muted-foreground">{Math.round(workerGroup.hours * 10) / 10}h</span>
+                  <span className="text-sm text-muted-foreground">{workerGroup.entries.length} task(s)</span>
+                  <span className="font-mono text-xs text-muted-foreground ml-auto">{workerGroup.entries.map(entry => formatArea(entry)).join(' / ')}</span>
                 </div>
                 {isExpanded && (
                   <div className="px-4 py-3 bg-muted/20 border-t space-y-2 text-sm">
                     <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                      <div><span className="text-muted-foreground">Labor ID: </span><span className="font-mono font-medium">{getWorkerLabel(e.workerId, e.workerName)}</span></div>
-                      <div><span className="text-muted-foreground">Start: </span><span className="font-medium">{formatDT(e.startTime)}</span></div>
-                      <div><span className="text-muted-foreground">End: </span><span className="font-medium">{formatDT(e.endTime)}</span></div>
-                      <div><span className="text-muted-foreground">{fieldLabels.hours}: </span><span className="font-medium">{e.hours}h</span></div>
-                      <div><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{formatArea(e)}</span></div>
-                      <div><span className="text-muted-foreground">{fieldLabels.workCode}: </span><span className="font-mono font-medium">{e.workCodeName}</span></div>
+                      <div><span className="text-muted-foreground">Labor ID: </span><span className="font-mono font-medium">{workerGroup.laborId}</span></div>
+                      <div><span className="text-muted-foreground">Total Hours: </span><span className="font-medium">{Math.round(workerGroup.hours * 10) / 10}h</span></div>
                     </div>
-                    {e.detail && (
-                      <div className="pt-1.5 border-t">
-                        <span className="text-muted-foreground">{fieldLabels.detail}: </span>
-                        <p className="mt-0.5 font-medium">{e.detail}</p>
-                      </div>
-                    )}
+                    <div className="space-y-2 pt-1.5 border-t">
+                      {workerGroup.entries.map(entry => (
+                        <div key={entry.id} className="rounded border bg-card p-2">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            <span><span className="text-muted-foreground">{fieldLabels.hours}: </span><span className="font-medium">{entry.hours}h</span></span>
+                            <span><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{formatArea(entry)}</span></span>
+                            <span><span className="text-muted-foreground">{fieldLabels.workCode}: </span><span className="font-mono font-medium">{entry.workCodeName}</span></span>
+                          </div>
+                          {entry.detail && <p className="mt-1 text-sm font-medium">{entry.detail}</p>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -162,7 +180,6 @@ export default function ReviewPage() {
                   <div className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => toggleEntry(euKey)}>
                     <ChevronRight size={14} className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                     <span className="font-medium text-sm">{eu.equipmentName}</span>
-                    <span className="text-sm text-muted-foreground">{formatDT(eu.startTime)} - {formatDT(eu.endTime)}</span>
                     <span className="text-sm text-muted-foreground">{eu.hours}h</span>
                     <span className="text-sm text-muted-foreground">{formatArea(eu)}</span>
                     <span className="font-mono text-xs text-muted-foreground ml-auto">{eu.workCodeName}</span>
@@ -171,8 +188,6 @@ export default function ReviewPage() {
                     <div className="px-4 py-3 bg-muted/20 border-t space-y-1 text-sm">
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
                         <div><span className="text-muted-foreground">{fieldLabels.equipmentName}: </span><span className="font-medium">{eu.equipmentName}</span></div>
-                        <div><span className="text-muted-foreground">Start: </span><span className="font-medium">{formatDT(eu.startTime)}</span></div>
-                        <div><span className="text-muted-foreground">End: </span><span className="font-medium">{formatDT(eu.endTime)}</span></div>
                         <div><span className="text-muted-foreground">{fieldLabels.hours}: </span><span className="font-medium">{eu.hours}h</span></div>
                         <div><span className="text-muted-foreground">{fieldLabels.area}: </span><span className="font-medium">{formatArea(eu)}</span></div>
                         <div><span className="text-muted-foreground">Work Code: </span><span className="font-medium">{eu.workCodeName}</span></div>

@@ -460,13 +460,10 @@ export default function DailyLogPage() {
         const time = matrixTimes[matrixKey('worker', workerId, item.id)];
         const hours = getCellHours(time);
         if (hours <= 0) return;
-        const startTime = time?.startTime || defaultStart();
         workerRows.push({
           id: `e_${Date.now()}_${workerRows.length}`,
           workerId,
           workerName: worker?.name || '',
-          startTime,
-          endTime: time?.endTime || endFromHours(startTime, hours),
           hours,
           area: item.area,
           areaDetail: item.areaDetail,
@@ -483,13 +480,10 @@ export default function DailyLogPage() {
         const time = matrixTimes[matrixKey('equipment', equipmentId, item.id)];
         const hours = getCellHours(time);
         if (hours <= 0) return;
-        const startTime = time?.startTime || defaultStart();
         equipmentRows.push({
           id: `eu_${Date.now()}_${equipmentRows.length}`,
           equipmentId,
           equipmentName: eq?.name || '',
-          startTime,
-          endTime: time?.endTime || endFromHours(startTime, hours),
           hours,
           area: item.area,
           areaDetail: item.areaDetail,
@@ -593,8 +587,8 @@ export default function DailyLogPage() {
     const workerIds = new Set<string>();
     const equipmentIds = new Set<string>();
 
-    const ensureItem = (entry: Pick<DailyLogEntry, 'area' | 'areaDetail' | 'workCodeId' | 'workCodeName' | 'detail' | 'startTime' | 'endTime'>) => {
-      const key = [entry.area, entry.areaDetail || '', entry.workCodeId, entry.detail, entry.startTime, entry.endTime].join('|');
+    const ensureItem = (entry: Pick<DailyLogEntry, 'area' | 'areaDetail' | 'workCodeId' | 'workCodeName' | 'detail' | 'hours'>) => {
+      const key = [entry.area, entry.areaDetail || '', entry.workCodeId, entry.detail].join('|');
       if (!itemMap.has(key)) {
         itemMap.set(key, createWorkItem({
           area: entry.area,
@@ -612,12 +606,12 @@ export default function DailyLogPage() {
     log.entries.forEach(entry => {
       workerIds.add(entry.workerId);
       const item = ensureItem(entry);
-      times[matrixKey('worker', entry.workerId, item.id)] = { hours: String(entry.hours || calcHours(entry.startTime, entry.endTime)), startTime: entry.startTime, endTime: entry.endTime };
+      times[matrixKey('worker', entry.workerId, item.id)] = { hours: String(entry.hours || calcHours(entry.startTime || '', entry.endTime || '')), startTime: defaultStart(), endTime: defaultEnd() };
     });
     log.equipmentUsage.forEach(entry => {
       equipmentIds.add(entry.equipmentId);
       const item = ensureItem(entry);
-      times[matrixKey('equipment', entry.equipmentId, item.id)] = { hours: String(entry.hours || calcHours(entry.startTime, entry.endTime)), startTime: entry.startTime, endTime: entry.endTime };
+      times[matrixKey('equipment', entry.equipmentId, item.id)] = { hours: String(entry.hours || calcHours(entry.startTime || '', entry.endTime || '')), startTime: defaultStart(), endTime: defaultEnd() };
     });
 
     setWorkItems(Array.from(itemMap.values()).length ? Array.from(itemMap.values()) : [createWorkItem()]);
@@ -797,6 +791,26 @@ export default function DailyLogPage() {
   const formatArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ');
   const selectedWorkers = teamWorkers.filter(worker => selectedWorkerIds.has(worker.id));
   const selectedEquipment = teamEquip.filter(eq => selectedEquipmentIds.has(eq.id));
+
+  const groupWorkerEntries = (entries: DailyLogEntry[]) => {
+    const grouped = new Map<string, { id: string; workerId: string; workerName: string; laborId: string; hours: number; entries: DailyLogEntry[] }>();
+    entries.forEach(entry => {
+      const key = entry.workerId || entry.workerName;
+      const existing = grouped.get(key) || {
+        id: key,
+        workerId: entry.workerId,
+        workerName: entry.workerName,
+        laborId: getWorkerLaborId(entry),
+        hours: 0,
+        entries: [],
+      };
+      existing.hours += entry.hours;
+      existing.entries.push(entry);
+      grouped.set(key, existing);
+    });
+    return Array.from(grouped.values());
+  };
+
   const wizardTotals = buildEntriesFromMatrix();
   const workerTotalHours = wizardTotals.workerRows.reduce((sum, entry) => sum + entry.hours, 0);
   const equipmentTotalHours = wizardTotals.equipmentRows.reduce((sum, entry) => sum + entry.hours, 0);
@@ -1275,7 +1289,7 @@ export default function DailyLogPage() {
           <div key={item.id} className="rounded-lg border p-3 space-y-2">
             <div>
               <h3 className="font-semibold">施工内容 {index + 1}: {formatArea(item)}</h3>
-              <p className="text-sm text-muted-foreground">{item.workCodeName} · {formatDT(item.startTime)} - {formatDT(item.endTime)}</p>
+              <p className="text-sm text-muted-foreground">{item.workCodeName}</p>
               <p className="text-sm">{item.detail}</p>
               <p className="text-sm text-muted-foreground">工作量：{item.quantity}</p>
             </div>
@@ -1892,40 +1906,41 @@ export default function DailyLogPage() {
                 <div>
                   <h3 className="text-sm font-semibold mb-2">工人记录 Worker Entries</h3>
                   <div className="space-y-1">
-                    {log.entries.map(e => {
-                      const isExpanded = expandedEntryId === e.id;
+                    {groupWorkerEntries(log.entries).map(workerGroup => {
+                      const isExpanded = expandedEntryId === `worker_${workerGroup.id}`;
                       return (
-                        <div key={e.id} className="rounded-md border overflow-hidden">
+                        <div key={workerGroup.id} className="rounded-md border overflow-hidden">
                           <div
                             className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors"
-                            onClick={() => toggleEntry(e.id)}
+                            onClick={() => toggleEntry(`worker_${workerGroup.id}`)}
                           >
                             <ChevronRight size={14} className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                              <span className="w-24 min-w-0">
-                              <span className="block font-mono font-semibold text-sm truncate">{getWorkerLaborId(e)}</span>
-                              <span className="block text-xs text-muted-foreground truncate">{e.workerName}</span>
+                              <span className="block font-mono font-semibold text-sm truncate">{workerGroup.laborId}</span>
+                              <span className="block text-xs text-muted-foreground truncate">{workerGroup.workerName}</span>
                             </span>
-                              <span className="text-sm text-muted-foreground">{formatDT(e.startTime)}–{formatDT(e.endTime)}</span>
-                              <span className="text-sm text-muted-foreground">{e.hours}h</span>
-                              <span className="text-sm text-muted-foreground">{formatArea(e)}</span>
-                            <span className="font-mono text-xs text-muted-foreground ml-auto">{e.workCodeName}</span>
+                              <span className="text-sm text-muted-foreground">{Math.round(workerGroup.hours * 10) / 10}h</span>
+                              <span className="text-sm text-muted-foreground">{workerGroup.entries.length} task(s)</span>
+                            <span className="font-mono text-xs text-muted-foreground ml-auto">{workerGroup.entries.map(entry => formatArea(entry)).join(' / ')}</span>
                           </div>
                           {isExpanded && (
                             <div className="px-4 py-3 bg-muted/20 border-t space-y-2 text-sm">
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                                  <div><span className="text-muted-foreground">劳工号 Labor ID：</span><span className="font-mono font-medium">{getWorkerLaborId(e)}</span></div>
-                                  <div><span className="text-muted-foreground">开始时间 Start：</span><span className="font-medium">{formatDT(e.startTime)}</span></div>
-                                  <div><span className="text-muted-foreground">结束时间 End：</span><span className="font-medium">{formatDT(e.endTime)}</span></div>
-                                  <div><span className="text-muted-foreground">工时 Hours：</span><span className="font-medium">{e.hours}h</span></div>
-                                  <div><span className="text-muted-foreground">施工区域 Area：</span><span className="font-medium">{formatArea(e)}</span></div>
-                                  <div><span className="text-muted-foreground">施工代码 Code：</span><span className="font-mono font-medium">{e.workCodeName}</span></div>
+                                  <div><span className="text-muted-foreground">劳工号 Labor ID：</span><span className="font-mono font-medium">{workerGroup.laborId}</span></div>
+                                  <div><span className="text-muted-foreground">总工时 Total Hours：</span><span className="font-medium">{Math.round(workerGroup.hours * 10) / 10}h</span></div>
                                 </div>
-                              {e.detail && (
-                                <div className="pt-1.5 border-t">
-                                  <span className="text-muted-foreground">详细描述 Description：</span>
-                                  <p className="mt-0.5 font-medium">{e.detail}</p>
-                                </div>
-                              )}
+                              <div className="space-y-2 pt-1.5 border-t">
+                                {workerGroup.entries.map(entry => (
+                                  <div key={entry.id} className="rounded border bg-card p-2">
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                      <span><span className="text-muted-foreground">Hours: </span><span className="font-medium">{entry.hours}h</span></span>
+                                      <span><span className="text-muted-foreground">Area: </span><span className="font-medium">{formatArea(entry)}</span></span>
+                                      <span><span className="text-muted-foreground">Code: </span><span className="font-mono font-medium">{entry.workCodeName}</span></span>
+                                    </div>
+                                    {entry.detail && <p className="mt-1 text-sm font-medium">{entry.detail}</p>}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1949,7 +1964,6 @@ export default function DailyLogPage() {
                             >
                               <ChevronRight size={14} className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                               <span className="font-medium text-sm">{eu.equipmentName}</span>
-                              <span className="text-sm text-muted-foreground">{formatDT(eu.startTime)}–{formatDT(eu.endTime)}</span>
                               <span className="text-sm text-muted-foreground">{eu.hours}h</span>
                               <span className="text-sm text-muted-foreground">{formatArea(eu)}</span>
                               <span className="font-mono text-xs text-muted-foreground ml-auto">{eu.workCodeName}</span>
@@ -1958,8 +1972,6 @@ export default function DailyLogPage() {
                               <div className="px-4 py-3 bg-muted/20 border-t space-y-1 text-sm">
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
                                   <div><span className="text-muted-foreground">设备名称 Equipment：</span><span className="font-medium">{eu.equipmentName}</span></div>
-                                  <div><span className="text-muted-foreground">开始时间 Start：</span><span className="font-medium">{formatDT(eu.startTime)}</span></div>
-                                  <div><span className="text-muted-foreground">结束时间 End：</span><span className="font-medium">{formatDT(eu.endTime)}</span></div>
                                   <div><span className="text-muted-foreground">使用时长 Duration：</span><span className="font-medium">{eu.hours}h</span></div>
                                   <div><span className="text-muted-foreground">使用区域 Area：</span><span className="font-medium">{formatArea(eu)}</span></div>
                                   <div><span className="text-muted-foreground">施工内容 Work Code：</span><span className="font-medium">{eu.workCodeName}</span></div>

@@ -60,8 +60,8 @@ export interface DailyLogEntry {
   id: string;
   workerId: string;
   workerName: string;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   hours: number;
   area: string;
   areaDetail?: string;
@@ -87,8 +87,8 @@ export interface EquipmentUsageEntry {
   id: string;
   equipmentId: string;
   equipmentName: string;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   hours: number;
   area: string;
   areaDetail?: string;
