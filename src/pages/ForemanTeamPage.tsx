@@ -159,6 +159,11 @@ export default function ForemanTeamPage() {
     </Select>
   );
 
+  const getEquipmentTeamNames = (equipmentId: string) => teamAssignments
+    .filter(assignment => assignment.equipmentIds.includes(equipmentId))
+    .map(assignment => personnel.find(p => p.id === assignment.foremanId)?.name)
+    .filter(Boolean) as string[];
+
   return (
     <div>
       <div className="page-header">
@@ -243,21 +248,28 @@ export default function ForemanTeamPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {pagedEquipment.map(eq => (
+          {pagedEquipment.map(eq => {
+            const teamNames = getEquipmentTeamNames(eq.id);
+            const isShared = teamNames.length > 1;
+            return (
             <div key={eq.id} className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold text-sm">{eq.name}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  eq.status === 'available' ? 'bg-emerald-100 text-emerald-700' :
-                  eq.status === 'in_use' ? 'bg-amber-100 text-amber-700' :
-                  'bg-muted text-muted-foreground'
-                }`}>
-                  {equipmentStatusLabels[eq.status]}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {isShared && <span className="text-xs px-2 py-0.5 rounded-full border border-blue-500 text-blue-600">共享 Shared</span>}
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    eq.status === 'available' ? 'bg-emerald-100 text-emerald-700' :
+                    eq.status === 'in_use' ? 'bg-amber-100 text-amber-700' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    {equipmentStatusLabels[eq.status]}
+                  </span>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground mb-1">{fieldLabels.equipmentNo}：{eq.equipmentNo || '-'}</p>
               <p className="text-xs text-muted-foreground mb-1">{fieldLabels.model}：{eq.model}</p>
               <p className="text-xs text-muted-foreground mb-1">{fieldLabels.location}：{eq.location || fieldLabels.unassigned}</p>
+              {isShared && <p className="text-xs text-muted-foreground mb-1">共用班组 Shared by：{teamNames.join(' / ')}</p>}
               {myEngineer && <p className="text-xs text-muted-foreground mb-1">工程师 Engineer：{myEngineer}</p>}
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => openEditEq(eq)} className="gap-1 flex-1">
@@ -265,7 +277,8 @@ export default function ForemanTeamPage() {
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         {renderPager(safeEquipmentPage, equipmentTotalPages, setEquipmentPage, teamEquip.length)}
         {teamEquip.length === 0 && (

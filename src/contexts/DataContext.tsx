@@ -577,7 +577,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const normalized = teamAssignments.map(a => ({
       ...a,
       workerIds: [...new Set(a.workerIds)],
-      equipmentIds: [...new Set(a.equipmentIds.filter(id => id !== equipmentId))],
+      equipmentIds: [...new Set(a.equipmentIds)],
     }));
     const target = normalized.find(t => t.foremanId === foremanId);
     if (target) {

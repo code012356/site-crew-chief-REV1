@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { DailyLog, Equipment, EquipmentStatus, Personnel, WorkCode } from './types';
+import { DailyLog, Equipment, EquipmentStatus, Personnel, TeamAssignment, WorkCode } from './types';
 
 const gradeToRole: Record<string, Personnel['role']> = {
   FOREMAN: 'foreman',
@@ -166,22 +166,33 @@ export function importPersonnel(file: File): Promise<Personnel[]> {
   });
 }
 
-export function exportEquipment(data: Equipment[]) {
+export function exportEquipment(data: Equipment[], teamAssignments?: TeamAssignment[], personnelList?: Personnel[]) {
+  const getAssignedTeams = (equipmentId: string) => {
+    if (!teamAssignments || !personnelList) return '';
+    return teamAssignments
+      .filter(assignment => assignment.equipmentIds.includes(equipmentId))
+      .map(assignment => personnelList.find(p => p.id === assignment.foremanId)?.name)
+      .filter(Boolean)
+      .join(' / ');
+  };
   const rows = data.map(e => ({
     '设备编号 Equipment No.': e.equipmentNo || '',
     '设备名称 Equipment Name': e.name,
     '型号 Model': e.model,
     '状态 Status': eqStatusLabelMap[e.status],
     '位置 Location': e.location || '',
+    '分配班组 Assigned Team': getAssignedTeams(e.id),
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 24 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '设备列表 Equipment');
   XLSX.writeFile(wb, `设备列表_Equipment_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
-export function importEquipment(file: File): Promise<Equipment[]> {
+export type ImportedEquipment = Equipment & { assignedTeam?: string };
+
+export function importEquipment(file: File): Promise<ImportedEquipment[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -189,7 +200,7 @@ export function importEquipment(file: File): Promise<Equipment[]> {
         const wb = XLSX.read(e.target?.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
-        const equipment: Equipment[] = rows.map((row, index) => {
+        const equipment: ImportedEquipment[] = rows.map((row, index) => {
           const statusRaw = getByHeader(row, ['Status', '状态']);
           return {
             id: `imp_eq_${Date.now()}_${index}`,
@@ -198,6 +209,7 @@ export function importEquipment(file: File): Promise<Equipment[]> {
             model: getByHeader(row, ['Model', '型号']),
             status: eqStatusMap[statusRaw] || 'available',
             location: getByHeader(row, ['Location', '位置']) || undefined,
+            assignedTeam: getByHeader(row, ['Assigned Team', '分配班组', 'Team', '班组']) || undefined,
           };
         }).filter(equipment => equipment.name);
         resolve(equipment);

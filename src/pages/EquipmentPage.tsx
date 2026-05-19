@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -62,7 +63,7 @@ export default function EquipmentPage() {
   // ── Admin equipment CRUD dialog state ──
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
-  const [form, setForm] = useState({ name: '', equipmentNo: '', model: '', status: 'available' as EquipmentStatus, location: '', assignedForeman: '' });
+  const [form, setForm] = useState({ name: '', equipmentNo: '', model: '', status: 'available' as EquipmentStatus, location: '', assignedForemanIds: [] as string[] });
 
   // ── Request dialog state (for foreman/engineer) ──
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -79,48 +80,92 @@ export default function EquipmentPage() {
   const [engineerComment, setEngineerComment] = useState('');
   const [newEqForm, setNewEqForm] = useState({ name: '', equipmentNo: '', model: '', location: '' });
 
-  const getAssignedForeman = (eqId: string) => {
-    const assignment = teamAssignments.find(a => a.equipmentIds.includes(eqId));
-    return assignment ? assignment.foremanId : '';
-  };
+  const getAssignedForemen = (eqId: string) => teamAssignments.filter(a => a.equipmentIds.includes(eqId));
+  const getAssignedForemanIds = (eqId: string) => getAssignedForemen(eqId).map(a => a.foremanId);
+  const getAssignedForemanNames = (eqId: string) => getAssignedForemen(eqId)
+    .map(a => personnel.find(p => p.id === a.foremanId)?.name)
+    .filter(Boolean) as string[];
 
   const getEngineerForEquipment = (eqId: string) => {
-    const foremanId = getAssignedForeman(eqId);
-    if (!foremanId) return null;
-    const ea = engineerAssignments.find(a => a.foremanIds.includes(foremanId));
-    if (!ea) return null;
-    const eng = personnel.find(p => p.id === ea.engineerId);
-    return eng ? eng.name : null;
+    const names = getAssignedForemanIds(eqId)
+      .map(foremanId => {
+        const ea = engineerAssignments.find(a => a.foremanIds.includes(foremanId));
+        if (!ea) return null;
+        return personnel.find(p => p.id === ea.engineerId)?.name || null;
+      })
+      .filter(Boolean) as string[];
+    return [...new Set(names)].join(' / ') || null;
   };
 
   // ── Admin CRUD handlers ──
-  const openCreate = () => { setEditing(null); setForm({ name: '', equipmentNo: '', model: '', status: 'available', location: '', assignedForeman: '' }); setDialogOpen(true); };
+  const openCreate = () => { setEditing(null); setForm({ name: '', equipmentNo: '', model: '', status: 'available', location: '', assignedForemanIds: [] }); setDialogOpen(true); };
   const openEdit = (e: Equipment) => {
     setEditing(e);
-    setForm({ name: e.name, equipmentNo: e.equipmentNo || '', model: e.model, status: e.status, location: e.location || '', assignedForeman: getAssignedForeman(e.id) });
+    setForm({ name: e.name, equipmentNo: e.equipmentNo || '', model: e.model, status: e.status, location: e.location || '', assignedForemanIds: getAssignedForemanIds(e.id) });
     setDialogOpen(true);
+  };
+
+  const setEquipmentTeams = async (equipmentId: string, foremanIds: string[]) => {
+    const targetIds = new Set(foremanIds);
+    const next = teamAssignments.map(assignment => {
+      const hasEquipment = assignment.equipmentIds.includes(equipmentId);
+      if (targetIds.has(assignment.foremanId)) {
+        return { ...assignment, equipmentIds: [...new Set([...assignment.equipmentIds, equipmentId])] };
+      }
+      return hasEquipment
+        ? { ...assignment, equipmentIds: assignment.equipmentIds.filter(id => id !== equipmentId) }
+        : assignment;
+    });
+    for (const foremanId of foremanIds) {
+      if (!next.some(assignment => assignment.foremanId === foremanId)) {
+        next.push({ foremanId, workerIds: [], equipmentIds: [equipmentId] });
+      }
+    }
+    for (const assignment of next) {
+      await updateTeamAssignment(assignment.foremanId, assignment.workerIds, assignment.equipmentIds);
+    }
   };
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error(messages.fillComplete); return; }
     if (editing) {
       await dbUpdateEquipment(editing.id, { name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
-      for (const a of teamAssignments) {
-        if (a.equipmentIds.includes(editing.id)) {
-          await updateTeamAssignment(a.foremanId, a.workerIds, a.equipmentIds.filter(id => id !== editing.id));
-        }
-      }
-      if (form.assignedForeman && form.assignedForeman !== 'none') {
-        await addEquipmentToTeam(form.assignedForeman, editing.id);
-      }
+      await setEquipmentTeams(editing.id, form.assignedForemanIds);
     } else {
       const newEquipmentId = await dbAddEquipment({ name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
-      if (form.assignedForeman && form.assignedForeman !== 'none') {
-        await addEquipmentToTeam(form.assignedForeman, newEquipmentId);
-      }
+      await setEquipmentTeams(newEquipmentId, form.assignedForemanIds);
     }
     toast.success(messages.saved);
     setDialogOpen(false);
+  };
+
+  const normalizeTeamName = (value: string) => value
+    .toLowerCase()
+    .replace(/\b(mr|mrs|ms|miss)\b\.?/g, '')
+    .replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+
+  const matchAssignedTeamForemen = (assignedTeam?: string) => {
+    if (!assignedTeam) return [];
+    const ignored = new Set(['', 'none', 'na', 'n/a', '-', 'unassigned', 'whole site', 'wholesite', 'site']);
+    const matched = new Set<string>();
+    assignedTeam
+      .split(/[\/,;、，；]+/)
+      .map(part => part.trim())
+      .filter(part => !ignored.has(part.toLowerCase()))
+      .forEach(part => {
+        const normalized = normalizeTeamName(part);
+        if (!normalized) return;
+        const exact = foremen.find(fm =>
+          normalizeTeamName(fm.name) === normalized ||
+          normalizeTeamName(fm.laborId || '') === normalized
+        );
+        const fuzzy = exact || foremen.find(fm => {
+          const name = normalizeTeamName(fm.name);
+          return name.includes(normalized) || normalized.includes(name);
+        });
+        if (fuzzy) matched.add(fuzzy.id);
+      });
+    return Array.from(matched);
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +175,13 @@ export default function EquipmentPage() {
     try {
       const imported = await importEquipment(file);
       for (const eq of imported) {
-        await dbAddEquipment({ name: eq.name, equipmentNo: eq.equipmentNo, model: eq.model, status: eq.status, location: eq.location });
+        const newEquipmentId = await dbAddEquipment({ name: eq.name, equipmentNo: eq.equipmentNo, model: eq.model, status: eq.status, location: eq.location });
+        const foremanIds = matchAssignedTeamForemen(eq.assignedTeam);
+        if (foremanIds.length > 0) {
+          for (const foremanId of foremanIds) {
+            await addEquipmentToTeam(foremanId, newEquipmentId);
+          }
+        }
       }
       toast.success(`${messages.imported} (${imported.length})`);
     } catch { toast.error(messages.importFailed); }
@@ -393,19 +444,22 @@ export default function EquipmentPage() {
 
   // ── Equipment card (shared) ──
   const renderEquipmentCard = (eq: Equipment) => {
-    const fmId = getAssignedForeman(eq.id);
-    const fmName = fmId ? personnel.find(p => p.id === fmId)?.name : null;
+    const fmNames = getAssignedForemanNames(eq.id);
+    const isShared = fmNames.length > 1;
     const engName = getEngineerForEquipment(eq.id);
     return (
       <div key={eq.id} className="stat-card">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold">{eq.name}</h3>
-          <span className={`status-badge ${eq.status === 'available' ? 'status-approved' : eq.status === 'in_use' ? 'status-pending' : eq.status === 'maintenance' ? 'status-leave' : 'status-resigned'}`}>{equipmentStatusLabels[eq.status]}</span>
+          <div className="flex items-center gap-1.5">
+            {isShared && <Badge variant="outline" className="border-blue-500 text-blue-600">共享 Shared</Badge>}
+            <span className={`status-badge ${eq.status === 'available' ? 'status-approved' : eq.status === 'in_use' ? 'status-pending' : eq.status === 'maintenance' ? 'status-leave' : 'status-resigned'}`}>{equipmentStatusLabels[eq.status]}</span>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground mb-1">编号 No.：{eq.equipmentNo || '-'}</p>
         <p className="text-sm text-muted-foreground mb-1">型号 Model：{eq.model}</p>
         <p className="text-sm text-muted-foreground mb-1">位置 Location：{eq.location || fieldLabels.unassigned}</p>
-        <p className="text-sm text-muted-foreground mb-1">班组 Team：{fmName || fieldLabels.unassigned}</p>
+        <p className="text-sm text-muted-foreground mb-1">使用班组 Teams：{fmNames.length ? fmNames.join(' / ') : fieldLabels.unassigned}</p>
         {engName && <p className="text-sm text-muted-foreground mb-1">工程师 Engineer：{engName}</p>}
         <div className="mt-3 flex gap-2">
           {isEquipmentManager ? (
@@ -759,7 +813,7 @@ export default function EquipmentPage() {
           </div>
           <div className="mobile-action-grid">
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2"><Upload size={16} /> {actionLabels.import}</Button>
-            <Button variant="outline" size="sm" onClick={() => exportEquipment(equipment)} className="gap-2"><Download size={16} /> {actionLabels.export}</Button>
+            <Button variant="outline" size="sm" onClick={() => exportEquipment(equipment, teamAssignments, personnel)} className="gap-2"><Download size={16} /> {actionLabels.export}</Button>
             <Button size="sm" onClick={openCreate} className="gap-2"><Plus size={16} /> {actionLabels.add}</Button>
           </div>
         </div>
@@ -822,13 +876,27 @@ export default function EquipmentPage() {
               </div>
               <div>
                 <Label>{fieldLabels.assignedTeam}</Label>
-                <Select value={form.assignedForeman} onValueChange={v => setForm(f => ({ ...f, assignedForeman: v }))}>
-                  <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
-                    {foremen.map(fm => <SelectItem key={fm.id} value={fm.id}>{fm.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1 max-h-44 overflow-y-auto rounded-md border p-2 space-y-1">
+                  {foremen.map(fm => (
+                    <label key={fm.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/40">
+                      <Checkbox
+                        checked={form.assignedForemanIds.includes(fm.id)}
+                        onCheckedChange={checked => setForm(f => ({
+                          ...f,
+                          assignedForemanIds: checked
+                            ? [...new Set([...f.assignedForemanIds, fm.id])]
+                            : f.assignedForemanIds.filter(id => id !== fm.id),
+                        }))}
+                      />
+                      <span>{fm.name}</span>
+                      {fm.laborId && <span className="font-mono text-xs text-muted-foreground">{fm.laborId}</span>}
+                    </label>
+                  ))}
+                  {foremen.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">{fieldLabels.unassigned}</p>}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  已选 {form.assignedForemanIds.length} 个班组，多个班组即为共享设备。
+                </p>
               </div>
             </div>
             <DialogFooter>

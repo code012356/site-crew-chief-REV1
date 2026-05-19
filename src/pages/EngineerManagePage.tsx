@@ -136,6 +136,11 @@ export default function EngineerManagePage() {
     </Select>
   );
 
+  const getEquipmentTeamNames = (equipmentId: string) => teamAssignments
+    .filter(assignment => assignment.equipmentIds.includes(equipmentId))
+    .map(assignment => personnel.find(p => p.id === assignment.foremanId)?.name)
+    .filter(Boolean) as string[];
+
   return (
     <div>
       <div className="page-header">
@@ -303,8 +308,8 @@ export default function EngineerManagePage() {
             </thead>
             <tbody className="divide-y">
               {managedEquipment.map(eq => {
-                const assignedTo = teamAssignments.find(a => a.equipmentIds.includes(eq.id));
-                const foremanName = assignedTo ? personnel.find(p => p.id === assignedTo.foremanId)?.name : null;
+                const teamNames = getEquipmentTeamNames(eq.id);
+                const isShared = teamNames.length > 1;
                 return (
                   <tr key={eq.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{eq.equipmentNo || '-'}</td>
@@ -329,10 +334,14 @@ export default function EngineerManagePage() {
                     <td className="px-4 py-3 text-muted-foreground">{eq.location || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{foremanName || fieldLabels.unassigned}</span>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-1.5" onClick={() => openAssignDialog(eq.id)}>
-                          <ArrowRight size={12} /> 调配 Reassign
-                        </Button>
+                        <span className="text-muted-foreground">{teamNames.length ? teamNames.join(' / ') : fieldLabels.unassigned}</span>
+                        {isShared ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full border border-blue-500 text-blue-600">共享 Shared · 由设备调度管理</span>
+                        ) : (
+                          <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-1.5" onClick={() => openAssignDialog(eq.id)}>
+                            <ArrowRight size={12} /> 调配 Reassign
+                          </Button>
+                        )}
                       </div>
                     </td>
                     <td className="sticky right-0 bg-card px-4 py-3 text-right shadow-[-8px_0_12px_-12px_hsl(var(--foreground))]">
