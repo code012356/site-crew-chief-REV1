@@ -25,10 +25,16 @@ interface WorkItemDraft {
   id: string;
   area: string;
   areaDetail: string;
+  workCodeCategory: string;
   workCodeId: string;
   workCodeName: string;
   detail: string;
   quantity: string;
+  startTime: string;
+  endTime: string;
+}
+
+interface MatrixTimeDraft {
   startTime: string;
   endTime: string;
 }
@@ -186,7 +192,7 @@ export default function DailyLogPage() {
   const [workItems, setWorkItems] = useState<WorkItemDraft[]>([]);
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(new Set());
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<Set<string>>(new Set());
-  const [matrixHours, setMatrixHours] = useState<Record<string, string>>({});
+  const [matrixTimes, setMatrixTimes] = useState<Record<string, MatrixTimeDraft>>({});
   const [copyDialogTarget, setCopyDialogTarget] = useState<CopyTarget>(null);
   const [copySourceDate, setCopySourceDate] = useState(format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
 
@@ -300,6 +306,7 @@ export default function DailyLogPage() {
     id: `wi_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     area: '',
     areaDetail: '',
+    workCodeCategory: '',
     workCodeId: '',
     workCodeName: '',
     detail: '',
@@ -314,7 +321,7 @@ export default function DailyLogPage() {
     setWorkItems([createWorkItem()]);
     setSelectedWorkerIds(new Set());
     setSelectedEquipmentIds(new Set());
-    setMatrixHours({});
+    setMatrixTimes({});
     setCopyDialogTarget(null);
     setBulkPickWorkerSearch('');
     setBulkPickEquipSearch('');
@@ -322,11 +329,30 @@ export default function DailyLogPage() {
 
   const matrixKey = (kind: 'worker' | 'equipment', resourceId: string, workItemId: string) => `${kind}:${resourceId}:${workItemId}`;
 
+  const getCellHours = (time?: MatrixTimeDraft) => {
+    if (!time) return 0;
+    return calcHours(time.startTime, time.endTime);
+  };
+
   const parseHours = (value: string) => {
-    const normalized = value.trim();
-    if (!normalized) return 0;
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 10) / 10 : 0;
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+
+  const matrixHours: Record<string, string> = {};
+  const setMatrixHours = (_updater: unknown) => {};
+
+  const setMatrixCellTime = (kind: 'worker' | 'equipment', resourceId: string, workItemId: string, updates?: Partial<MatrixTimeDraft>) => {
+    const key = matrixKey(kind, resourceId, workItemId);
+    setMatrixTimes(prev => {
+      if (!updates) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      const current = prev[key] || { startTime: defaultStart(), endTime: defaultEnd() };
+      return { ...prev, [key]: { ...current, ...updates } };
+    });
   };
 
   const detailWithQuantity = (item: WorkItemDraft) => {
@@ -338,12 +364,12 @@ export default function DailyLogPage() {
   const updateWorkItem = (id: string, field: keyof WorkItemDraft, value: string) => {
     setWorkItems(prev => prev.map(item => {
       if (item.id !== id) return item;
+      if (field === 'workCodeCategory') {
+        return { ...item, workCodeCategory: value, workCodeId: '', workCodeName: '' };
+      }
       if (field === 'workCodeId') {
         const wc = workCodes.find(c => c.id === value);
-        return { ...item, workCodeId: value, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
-      }
-      if (field === 'startTime' || field === 'endTime') {
-        return { ...item, [field]: roundDateTimeToHalfHour(value) };
+        return { ...item, workCodeId: value, workCodeCategory: wc?.category || item.workCodeCategory, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
       }
       return { ...item, [field]: value };
     }));
@@ -355,7 +381,7 @@ export default function DailyLogPage() {
       return;
     }
     setWorkItems(prev => prev.filter(item => item.id !== id));
-    setMatrixHours(prev => {
+    setMatrixTimes(prev => {
       const next = { ...prev };
       Object.keys(next).forEach(key => {
         if (key.endsWith(`:${id}`)) delete next[key];
@@ -406,14 +432,15 @@ export default function DailyLogPage() {
     selectedWorkerIds.forEach(workerId => {
       const worker = teamWorkers.find(w => w.id === workerId);
       workItems.forEach(item => {
-        const hours = parseHours(matrixHours[matrixKey('worker', workerId, item.id)] || '');
+        const time = matrixTimes[matrixKey('worker', workerId, item.id)];
+        const hours = getCellHours(time);
         if (hours <= 0) return;
         workerRows.push({
           id: `e_${Date.now()}_${workerRows.length}`,
           workerId,
           workerName: worker?.name || '',
-          startTime: item.startTime,
-          endTime: item.endTime,
+          startTime: time!.startTime,
+          endTime: time!.endTime,
           hours,
           area: item.area,
           areaDetail: item.areaDetail,
@@ -427,14 +454,15 @@ export default function DailyLogPage() {
     selectedEquipmentIds.forEach(equipmentId => {
       const eq = teamEquip.find(e => e.id === equipmentId);
       workItems.forEach(item => {
-        const hours = parseHours(matrixHours[matrixKey('equipment', equipmentId, item.id)] || '');
+        const time = matrixTimes[matrixKey('equipment', equipmentId, item.id)];
+        const hours = getCellHours(time);
         if (hours <= 0) return;
         equipmentRows.push({
           id: `eu_${Date.now()}_${equipmentRows.length}`,
           equipmentId,
           equipmentName: eq?.name || '',
-          startTime: item.startTime,
-          endTime: item.endTime,
+          startTime: time!.startTime,
+          endTime: time!.endTime,
           hours,
           area: item.area,
           areaDetail: item.areaDetail,
@@ -446,6 +474,57 @@ export default function DailyLogPage() {
     });
 
     return { workerRows, equipmentRows };
+  };
+
+  const validateMatrixTimes = () => {
+    const issues: string[] = [];
+    const collect = (kind: 'worker' | 'equipment', resources: { id: string; name: string; equipmentNo?: string; laborId?: string }[]) => {
+      resources.forEach(resource => {
+        const spans = workItems
+          .map(item => {
+            const time = matrixTimes[matrixKey(kind, resource.id, item.id)];
+            if (!time) return null;
+            const start = new Date(time.startTime).getTime();
+            const end = new Date(time.endTime).getTime();
+            const hours = getCellHours(time);
+            return { item, time, start, end, hours };
+          })
+          .filter(Boolean) as { item: WorkItemDraft; time: MatrixTimeDraft; start: number; end: number; hours: number }[];
+
+        const label = kind === 'worker'
+          ? `${resource.laborId || resource.name}`
+          : `${resource.equipmentNo || resource.name}`;
+
+        spans.forEach(span => {
+          if (!Number.isFinite(span.start) || !Number.isFinite(span.end) || span.end <= span.start) {
+            issues.push(`${label}: end time must be later than start time`);
+          }
+          if (span.hours > 24) {
+            issues.push(`${label}: one task cannot exceed 24h`);
+          }
+        });
+
+        const total = spans.reduce((sum, span) => sum + span.hours, 0);
+        if (total > 24) issues.push(`${label}: total daily hours cannot exceed 24h`);
+
+        const sorted = spans.filter(span => span.hours > 0).sort((a, b) => a.start - b.start);
+        for (let i = 1; i < sorted.length; i += 1) {
+          if (sorted[i].start < sorted[i - 1].end) {
+            issues.push(`${label}: time ranges overlap`);
+            break;
+          }
+        }
+      });
+    };
+
+    collect('worker', selectedWorkers);
+    collect('equipment', selectedEquipment);
+
+    if (issues.length > 0) {
+      toast.error(issues[0]);
+      return false;
+    }
+    return true;
   };
 
   const validateWizardStep = (step: WizardStep) => {
@@ -460,9 +539,10 @@ export default function DailyLogPage() {
       return false;
     }
     if (step === 3) {
+      if (!validateMatrixTimes()) return false;
       const { workerRows } = buildEntriesFromMatrix();
       if (workerRows.length === 0) {
-        toast.error('Please enter worker hours in the matrix');
+        toast.error('Please set worker start and end times in the matrix');
         return false;
       }
     }
@@ -476,7 +556,7 @@ export default function DailyLogPage() {
 
   const initializeWizardFromLog = (log: DailyLog) => {
     const itemMap = new Map<string, WorkItemDraft>();
-    const hours: Record<string, string> = {};
+    const times: Record<string, MatrixTimeDraft> = {};
     const workerIds = new Set<string>();
     const equipmentIds = new Set<string>();
 
@@ -486,12 +566,11 @@ export default function DailyLogPage() {
         itemMap.set(key, createWorkItem({
           area: entry.area,
           areaDetail: entry.areaDetail || '',
+          workCodeCategory: workCodes.find(wc => wc.id === entry.workCodeId)?.category || '',
           workCodeId: entry.workCodeId,
           workCodeName: entry.workCodeName,
           detail: entry.detail?.replace(/\s*\|\s*Work quantity:.*/, '') || '',
           quantity: entry.detail?.match(/Work quantity:\s*(.*)$/)?.[1] || 'N/A',
-          startTime: entry.startTime,
-          endTime: entry.endTime,
         }));
       }
       return itemMap.get(key)!;
@@ -500,18 +579,18 @@ export default function DailyLogPage() {
     log.entries.forEach(entry => {
       workerIds.add(entry.workerId);
       const item = ensureItem(entry);
-      hours[matrixKey('worker', entry.workerId, item.id)] = String(entry.hours || '');
+      times[matrixKey('worker', entry.workerId, item.id)] = { startTime: entry.startTime, endTime: entry.endTime };
     });
     log.equipmentUsage.forEach(entry => {
       equipmentIds.add(entry.equipmentId);
       const item = ensureItem(entry);
-      hours[matrixKey('equipment', entry.equipmentId, item.id)] = String(entry.hours || '');
+      times[matrixKey('equipment', entry.equipmentId, item.id)] = { startTime: entry.startTime, endTime: entry.endTime };
     });
 
     setWorkItems(Array.from(itemMap.values()).length ? Array.from(itemMap.values()) : [createWorkItem()]);
     setSelectedWorkerIds(workerIds);
     setSelectedEquipmentIds(equipmentIds);
-    setMatrixHours(hours);
+    setMatrixTimes(times);
     setWizardStep(4);
   };
 
@@ -765,6 +844,56 @@ export default function DailyLogPage() {
     </div>
   );
 
+  const renderWorkItemFormV2 = (item: WorkItemDraft, index: number) => (
+    <div key={item.id} className="rounded-lg border bg-muted/10 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">施工内容 {index + 1} Work Item {index + 1}</h3>
+        <Button variant="ghost" size="sm" className="h-8 gap-1 text-destructive hover:text-destructive" onClick={() => removeWorkItem(item.id)}>
+          <Trash2 size={13} /> 删除 Delete
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div>
+          <Label className="text-xs text-muted-foreground">大区域 Area</Label>
+          <Select value={item.area} onValueChange={value => updateWorkItem(item.id, 'area', value)}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="选择大区域 Select area" /></SelectTrigger>
+            <SelectContent>{areaNames.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">具体区域 Detail Area</Label>
+          <Input value={item.areaDetail} onChange={event => updateWorkItem(item.id, 'areaDetail', event.target.value)} placeholder="工长填写具体位置 Fill specific location" className="h-9" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">施工代码分类 Work Code Category</Label>
+          <Select value={item.workCodeCategory} onValueChange={value => updateWorkItem(item.id, 'workCodeCategory', value)}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="先选择大分类 Select category" /></SelectTrigger>
+            <SelectContent>{Object.keys(codesByCategory).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">具体施工代码 Work Code</Label>
+          <Select value={item.workCodeId} onValueChange={value => updateWorkItem(item.id, 'workCodeId', value)} disabled={!item.workCodeCategory}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="再选择具体项 Select item" /></SelectTrigger>
+            <SelectContent>
+              {(codesByCategory[item.workCodeCategory] || []).map(wc => (
+                <SelectItem key={wc.id} value={wc.id}><span className="font-mono text-xs">{wc.code}</span> {wc.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">工作量 Work Quantity</Label>
+          <Input value={item.quantity} onChange={event => updateWorkItem(item.id, 'quantity', event.target.value)} placeholder="手动填写，如 35m / 12m3 / N/A" className="h-9" />
+        </div>
+        <div className="md:col-span-2">
+          <Label className="text-xs text-muted-foreground">具体工作内容 Work Description</Label>
+          <Input value={item.detail} onChange={event => updateWorkItem(item.id, 'detail', event.target.value)} placeholder="手动填写具体施工内容 Describe work content" className="h-9" />
+        </div>
+      </div>
+    </div>
+  );
+
   const renderResourcePicker = () => (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="rounded-lg border p-3 space-y-3">
@@ -893,6 +1022,94 @@ export default function DailyLogPage() {
     </div>
   );
 
+  const renderMatrixTimeCell = (kind: 'worker' | 'equipment', resourceId: string, item: WorkItemDraft) => {
+    const time = matrixTimes[matrixKey(kind, resourceId, item.id)];
+    if (!time) {
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 w-full"
+          onClick={() => setMatrixCellTime(kind, resourceId, item.id, { startTime: defaultStart(), endTime: defaultEnd() })}
+        >
+          设置时间 Set time
+        </Button>
+      );
+    }
+    const hours = getCellHours(time);
+    return (
+      <div className="space-y-2">
+        <div>
+          <Label className="text-[11px] text-muted-foreground">开始 Start</Label>
+          <HalfHourDateTimePicker value={time.startTime} onChange={value => setMatrixCellTime(kind, resourceId, item.id, { startTime: roundDateTimeToHalfHour(value) })} />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground">结束 End</Label>
+          <HalfHourDateTimePicker value={time.endTime} onChange={value => setMatrixCellTime(kind, resourceId, item.id, { endTime: roundDateTimeToHalfHour(value) })} />
+        </div>
+        <div className={cn('flex items-center justify-between rounded-md px-2 py-1 text-xs', hours > 0 ? 'bg-muted/50' : 'bg-destructive/10 text-destructive')}>
+          <span>{hours > 0 ? `${hours}h` : '时间冲突'}</span>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setMatrixCellTime(kind, resourceId, item.id)}>
+            清空
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderHoursMatrixV2 = () => (
+    <div className="space-y-4">
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="min-w-[960px] w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="sticky left-0 z-10 bg-muted px-3 py-3 text-left font-medium">人员/设备 Resource</th>
+              {workItems.map((item, index) => (
+                <th key={item.id} className="min-w-[260px] px-3 py-3 text-left align-top font-medium">
+                  <div>施工内容 {index + 1}</div>
+                  <div className="text-xs text-muted-foreground">{formatArea(item)}</div>
+                  <div className="text-xs text-muted-foreground">{item.workCodeName}</div>
+                  <div className="text-xs text-muted-foreground">工作量：{item.quantity}</div>
+                </th>
+              ))}
+              <th className="px-3 py-3 text-left font-medium">合计 Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedWorkers.map(worker => {
+              const total = workItems.reduce((sum, item) => sum + getCellHours(matrixTimes[matrixKey('worker', worker.id, item.id)]), 0);
+              return (
+                <tr key={`worker_${worker.id}`} className="border-t">
+                  <td className="sticky left-0 z-10 bg-card px-3 py-2 align-top">
+                    <div className="font-medium">{worker.laborId || worker.name}</div>
+                    <div className="text-xs text-muted-foreground">{worker.name}</div>
+                  </td>
+                  {workItems.map(item => <td key={item.id} className="px-3 py-2 align-top">{renderMatrixTimeCell('worker', worker.id, item)}</td>)}
+                  <td className="px-3 py-2 align-top font-medium">{Math.round(total * 10) / 10}h</td>
+                </tr>
+              );
+            })}
+            {selectedEquipment.map(eq => {
+              const total = workItems.reduce((sum, item) => sum + getCellHours(matrixTimes[matrixKey('equipment', eq.id, item.id)]), 0);
+              return (
+                <tr key={`equipment_${eq.id}`} className="border-t bg-muted/10">
+                  <td className="sticky left-0 z-10 bg-card px-3 py-2 align-top">
+                    <div className="font-medium">{eq.equipmentNo || eq.name}</div>
+                    <div className="text-xs text-muted-foreground">{eq.name}</div>
+                  </td>
+                  {workItems.map(item => <td key={item.id} className="px-3 py-2 align-top">{renderMatrixTimeCell('equipment', eq.id, item)}</td>)}
+                  <td className="px-3 py-2 align-top font-medium">{Math.round(total * 10) / 10}h</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">点击“设置时间”才会生成该单元格记录；时间以半小时为最小粒度，系统会校验重叠和 24 小时上限。</p>
+    </div>
+  );
+
   const renderReview = () => (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -902,8 +1119,9 @@ export default function DailyLogPage() {
         <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">设备工时</p><p className="text-xl font-semibold">{equipmentTotalHours}h</p></div>
       </div>
       {workItems.map((item, index) => {
-        const workerRows = wizardTotals.workerRows.filter(row => row.area === item.area && row.areaDetail === item.areaDetail && row.workCodeId === item.workCodeId && row.startTime === item.startTime && row.endTime === item.endTime);
-        const equipmentRows = wizardTotals.equipmentRows.filter(row => row.area === item.area && row.areaDetail === item.areaDetail && row.workCodeId === item.workCodeId && row.startTime === item.startTime && row.endTime === item.endTime);
+        const itemDetail = detailWithQuantity(item);
+        const workerRows = wizardTotals.workerRows.filter(row => row.area === item.area && row.areaDetail === item.areaDetail && row.workCodeId === item.workCodeId && row.detail === itemDetail);
+        const equipmentRows = wizardTotals.equipmentRows.filter(row => row.area === item.area && row.areaDetail === item.areaDetail && row.workCodeId === item.workCodeId && row.detail === itemDetail);
         return (
           <div key={item.id} className="rounded-lg border p-3 space-y-2">
             <div>
@@ -1181,7 +1399,7 @@ export default function DailyLogPage() {
                 </Button>
               </div>
               <div className="space-y-3">
-                {workItems.map(renderWorkItemForm)}
+                {workItems.map(renderWorkItemFormV2)}
               </div>
             </div>
           )}
@@ -1202,7 +1420,7 @@ export default function DailyLogPage() {
                 <Label className="text-sm font-semibold">填写工时矩阵 Hours Matrix</Label>
                 <p className="text-xs text-muted-foreground mt-1">只填写工时；区域、施工代码、工作内容来自第一步。</p>
               </div>
-              {renderHoursMatrix()}
+              {renderHoursMatrixV2()}
             </div>
           )}
 
