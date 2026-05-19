@@ -544,6 +544,16 @@ export default function DailyLogPage() {
     return true;
   };
 
+  const getWorkItemAssignedHours = (item: WorkItemDraft) => {
+    const workerHours = selectedWorkers.reduce((sum, worker) => (
+      sum + getCellHours(matrixTimes[matrixKey('worker', worker.id, item.id)])
+    ), 0);
+    const equipmentHours = selectedEquipment.reduce((sum, eq) => (
+      sum + getCellHours(matrixTimes[matrixKey('equipment', eq.id, item.id)])
+    ), 0);
+    return { workerHours, equipmentHours, totalHours: workerHours + equipmentHours };
+  };
+
   const validateWizardStep = (step: WizardStep) => {
     if (step === 1) {
       if (workItems.some(item => !item.area || !item.areaDetail.trim() || !item.workCodeId || !item.detail.trim() || !item.quantity.trim())) {
@@ -560,6 +570,12 @@ export default function DailyLogPage() {
       const { workerRows } = buildEntriesFromMatrix();
       if (workerRows.length === 0) {
         toast.error('Please enter worker hours in the matrix');
+        return false;
+      }
+      const missingIndex = workItems.findIndex(item => getWorkItemAssignedHours(item).totalHours <= 0);
+      if (missingIndex >= 0) {
+        setActiveMatrixWorkItem(missingIndex);
+        toast.error(`Work item ${missingIndex + 1} has no hours. Please fill it before review.`);
         return false;
       }
     }
@@ -1098,6 +1114,7 @@ export default function DailyLogPage() {
         const activeIndex = Math.max(0, Math.min(activeMatrixWorkItem, workItems.length - 1));
         const item = workItems[activeIndex];
         if (!item) return null;
+        const itemStatuses = workItems.map(wi => getWorkItemAssignedHours(wi));
         const resourceRows = [
           ...selectedWorkers.map(worker => ({
             id: worker.id,
@@ -1142,6 +1159,28 @@ export default function DailyLogPage() {
                 >
                   Next <ChevronRight size={16} />
                 </Button>
+              </div>
+            )}
+            {workItems.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {workItems.map((wi, index) => {
+                  const filled = itemStatuses[index].totalHours > 0;
+                  return (
+                    <Button
+                      key={wi.id}
+                      type="button"
+                      variant={index === activeIndex ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        'h-8 shrink-0 px-2 text-xs',
+                        index !== activeIndex && !filled && 'border-destructive/50 text-destructive'
+                      )}
+                      onClick={() => setActiveMatrixWorkItem(index)}
+                    >
+                      {index + 1} {filled ? `${Math.round(itemStatuses[index].totalHours * 10) / 10}h` : 'empty'}
+                    </Button>
+                  );
+                })}
               </div>
             )}
             <div className="rounded-lg border">
