@@ -43,13 +43,13 @@ function HalfHourDateTimePicker({ value, onChange }: { value: string; onChange: 
   const setTime = (time: string) => onChange(`${current.date}T${time}`);
 
   return (
-    <div className="grid grid-cols-[minmax(8.25rem,1fr)_5rem] gap-2 sm:grid-cols-[minmax(8.25rem,1.35fr)_0.9fr]">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(8.25rem,1.35fr)_0.9fr]">
       <Popover>
         <PopoverTrigger asChild>
           <Button
             type="button"
             variant="outline"
-            className="h-9 min-w-0 justify-start px-2 text-left font-normal text-xs"
+            className="h-9 w-full min-w-0 justify-start px-2 text-left font-normal text-xs"
           >
             <CalendarIcon size={14} className="mr-1.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{current.date}</span>
@@ -66,7 +66,7 @@ function HalfHourDateTimePicker({ value, onChange }: { value: string; onChange: 
         </PopoverContent>
       </Popover>
       <Select value={current.time} onValueChange={setTime}>
-        <SelectTrigger className="h-9 min-w-0 text-xs"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-9 w-full min-w-0 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent className="max-h-64">
           {HALF_HOUR_TIMES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
         </SelectContent>
@@ -706,7 +706,7 @@ export default function DailyLogPage() {
             <div className="space-y-4">
               {entries.map((entry, i) => (
                 <div key={i} className="space-y-2 p-3 rounded-lg border bg-muted/10">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] md:gap-2 md:items-end">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] md:gap-2 md:items-end">
                     <div className="flex h-9 items-center justify-start sm:justify-center">
                       <Checkbox checked={selectedEntryIdx.has(i)} onCheckedChange={() => toggleEntrySel(i)} />
                     </div>
@@ -797,7 +797,7 @@ export default function DailyLogPage() {
             <div className="space-y-3">
               {eqEntries.map((entry, i) => (
                 <div key={i} className="space-y-2 p-3 rounded-lg border bg-muted/10">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] md:gap-2 md:items-end">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[24px_1fr_1fr_1fr_60px_1fr_40px] md:gap-2 md:items-end">
                     <div className="flex h-9 items-center justify-start sm:justify-center">
                       <Checkbox checked={selectedEqIdx.has(i)} onCheckedChange={() => toggleEqSel(i)} />
                     </div>
@@ -1127,7 +1127,7 @@ export default function DailyLogPage() {
           <DialogHeader><DialogTitle>批量修改工人记录 Bulk Edit Workers ({selectedEntryIdx.size})</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">仅填写需要修改的字段，留空则不变 Only filled fields will be updated</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div><Label className="text-xs">开始 Start</Label><HalfHourDateTimePicker value={bulkEdit.start || defaultStart()} onChange={v => setBulkEdit(p => ({ ...p, start: v }))} /></div>
               <div><Label className="text-xs">结束 End</Label><HalfHourDateTimePicker value={bulkEdit.end || defaultEnd()} onChange={v => setBulkEdit(p => ({ ...p, end: v }))} /></div>
             </div>
@@ -1164,7 +1164,7 @@ export default function DailyLogPage() {
           <DialogHeader><DialogTitle>批量修改设备记录 Bulk Edit Equipment ({selectedEqIdx.size})</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">仅填写需要修改的字段，留空则不变 Only filled fields will be updated</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div><Label className="text-xs">开始 Start</Label><HalfHourDateTimePicker value={bulkEdit.start || defaultStart()} onChange={v => setBulkEdit(p => ({ ...p, start: v }))} /></div>
               <div><Label className="text-xs">结束 End</Label><HalfHourDateTimePicker value={bulkEdit.end || defaultEnd()} onChange={v => setBulkEdit(p => ({ ...p, end: v }))} /></div>
             </div>
