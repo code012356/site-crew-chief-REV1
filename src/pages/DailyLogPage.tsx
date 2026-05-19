@@ -18,6 +18,21 @@ import { exportDailyLogs } from '@/lib/excel-utils';
 import RevisionHistoryDialog from '@/components/RevisionHistoryDialog';
 import SearchableSelect from '@/components/SearchableSelect';
 
+type WizardStep = 1 | 2 | 3 | 4;
+type CopyTarget = 'workers' | 'equipment' | null;
+
+interface WorkItemDraft {
+  id: string;
+  area: string;
+  areaDetail: string;
+  workCodeId: string;
+  workCodeName: string;
+  detail: string;
+  quantity: string;
+  startTime: string;
+  endTime: string;
+}
+
 const HALF_HOUR_TIMES = Array.from({ length: 48 }, (_, i) => {
   const hour = String(Math.floor(i / 2)).padStart(2, '0');
   const minute = i % 2 === 0 ? '00' : '30';
@@ -167,6 +182,13 @@ export default function DailyLogPage() {
   const [bulkEdit, setBulkEdit] = useState<{ start?: string; end?: string; area?: string; areaDetail?: string; workCodeId?: string }>({});
   const [bulkPickWorkerSearch, setBulkPickWorkerSearch] = useState('');
   const [bulkPickEquipSearch, setBulkPickEquipSearch] = useState('');
+  const [wizardStep, setWizardStep] = useState<WizardStep>(1);
+  const [workItems, setWorkItems] = useState<WorkItemDraft[]>([]);
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(new Set());
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<Set<string>>(new Set());
+  const [matrixHours, setMatrixHours] = useState<Record<string, string>>({});
+  const [copyDialogTarget, setCopyDialogTarget] = useState<CopyTarget>(null);
+  const [copySourceDate, setCopySourceDate] = useState(format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
 
   const toggleEntrySel = (i: number) => setSelectedEntryIdx(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
   const toggleEqSel = (i: number) => setSelectedEqIdx(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
@@ -193,7 +215,7 @@ export default function DailyLogPage() {
   };
   const confirmBulkAddEq = () => {
     const newOnes = Array.from(bulkPickEquip).map(eid => {
-      const eq = equipment.find(x => x.id === eid);
+      const eq = teamEquip.find(x => x.id === eid);
       return { equipmentId: eid, equipmentName: eq?.name || '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' };
     });
     setEqEntries(prev => [...prev, ...newOnes]);
@@ -274,6 +296,225 @@ export default function DailyLogPage() {
   };
   const todayLocal = () => format(new Date(), 'yyyy-MM-dd');
 
+  const createWorkItem = (overrides: Partial<WorkItemDraft> = {}): WorkItemDraft => ({
+    id: `wi_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    area: '',
+    areaDetail: '',
+    workCodeId: '',
+    workCodeName: '',
+    detail: '',
+    quantity: '',
+    startTime: defaultStart(),
+    endTime: defaultEnd(),
+    ...overrides,
+  });
+
+  const resetWizard = () => {
+    setWizardStep(1);
+    setWorkItems([createWorkItem()]);
+    setSelectedWorkerIds(new Set());
+    setSelectedEquipmentIds(new Set());
+    setMatrixHours({});
+    setCopyDialogTarget(null);
+    setBulkPickWorkerSearch('');
+    setBulkPickEquipSearch('');
+  };
+
+  const matrixKey = (kind: 'worker' | 'equipment', resourceId: string, workItemId: string) => `${kind}:${resourceId}:${workItemId}`;
+
+  const parseHours = (value: string) => {
+    const normalized = value.trim();
+    if (!normalized) return 0;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 10) / 10 : 0;
+  };
+
+  const detailWithQuantity = (item: WorkItemDraft) => {
+    const parts = [item.detail.trim()];
+    if (item.quantity.trim()) parts.push(`Work quantity: ${item.quantity.trim()}`);
+    return parts.filter(Boolean).join(' | ');
+  };
+
+  const updateWorkItem = (id: string, field: keyof WorkItemDraft, value: string) => {
+    setWorkItems(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      if (field === 'workCodeId') {
+        const wc = workCodes.find(c => c.id === value);
+        return { ...item, workCodeId: value, workCodeName: wc ? `[${wc.code}] ${wc.name}` : '' };
+      }
+      if (field === 'startTime' || field === 'endTime') {
+        return { ...item, [field]: roundDateTimeToHalfHour(value) };
+      }
+      return { ...item, [field]: value };
+    }));
+  };
+
+  const removeWorkItem = (id: string) => {
+    if (workItems.length === 1) {
+      toast.error('Please keep at least one work item');
+      return;
+    }
+    setWorkItems(prev => prev.filter(item => item.id !== id));
+    setMatrixHours(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        if (key.endsWith(`:${id}`)) delete next[key];
+      });
+      return next;
+    });
+  };
+
+  const toggleWorkerSelection = (workerId: string) => {
+    setSelectedWorkerIds(prev => {
+      const next = new Set(prev);
+      next.has(workerId) ? next.delete(workerId) : next.add(workerId);
+      return next;
+    });
+  };
+
+  const toggleEquipmentSelection = (equipmentId: string) => {
+    setSelectedEquipmentIds(prev => {
+      const next = new Set(prev);
+      next.has(equipmentId) ? next.delete(equipmentId) : next.add(equipmentId);
+      return next;
+    });
+  };
+
+  const copyPreviousResources = () => {
+    const sourceLogs = dailyLogs.filter(log => log.foremanId === foremanId && log.date === copySourceDate && !log.deletedAt);
+    if (sourceLogs.length === 0) {
+      toast.error('No logs found for selected source date');
+      return;
+    }
+    if (copyDialogTarget === 'workers') {
+      const ids = sourceLogs.flatMap(log => log.entries.map(entry => entry.workerId)).filter(Boolean);
+      setSelectedWorkerIds(new Set(ids));
+      toast.success(`Copied ${new Set(ids).size} worker(s)`);
+    }
+    if (copyDialogTarget === 'equipment') {
+      const ids = sourceLogs.flatMap(log => log.equipmentUsage.map(entry => entry.equipmentId)).filter(Boolean);
+      setSelectedEquipmentIds(new Set(ids));
+      toast.success(`Copied ${new Set(ids).size} equipment item(s)`);
+    }
+    setCopyDialogTarget(null);
+  };
+
+  const buildEntriesFromMatrix = () => {
+    const workerRows: DailyLogEntry[] = [];
+    const equipmentRows: EquipmentUsageEntry[] = [];
+
+    selectedWorkerIds.forEach(workerId => {
+      const worker = teamWorkers.find(w => w.id === workerId);
+      workItems.forEach(item => {
+        const hours = parseHours(matrixHours[matrixKey('worker', workerId, item.id)] || '');
+        if (hours <= 0) return;
+        workerRows.push({
+          id: `e_${Date.now()}_${workerRows.length}`,
+          workerId,
+          workerName: worker?.name || '',
+          startTime: item.startTime,
+          endTime: item.endTime,
+          hours,
+          area: item.area,
+          areaDetail: item.areaDetail,
+          workCodeId: item.workCodeId,
+          workCodeName: item.workCodeName,
+          detail: detailWithQuantity(item),
+        });
+      });
+    });
+
+    selectedEquipmentIds.forEach(equipmentId => {
+      const eq = teamEquip.find(e => e.id === equipmentId);
+      workItems.forEach(item => {
+        const hours = parseHours(matrixHours[matrixKey('equipment', equipmentId, item.id)] || '');
+        if (hours <= 0) return;
+        equipmentRows.push({
+          id: `eu_${Date.now()}_${equipmentRows.length}`,
+          equipmentId,
+          equipmentName: eq?.name || '',
+          startTime: item.startTime,
+          endTime: item.endTime,
+          hours,
+          area: item.area,
+          areaDetail: item.areaDetail,
+          workCodeId: item.workCodeId,
+          workCodeName: item.workCodeName,
+          detail: detailWithQuantity(item),
+        });
+      });
+    });
+
+    return { workerRows, equipmentRows };
+  };
+
+  const validateWizardStep = (step: WizardStep) => {
+    if (step === 1) {
+      if (workItems.some(item => !item.area || !item.areaDetail.trim() || !item.workCodeId || !item.detail.trim() || !item.quantity.trim())) {
+        toast.error('Please complete area, work code, work description, and work quantity');
+        return false;
+      }
+    }
+    if (step === 2 && selectedWorkerIds.size === 0) {
+      toast.error('Please select at least one worker');
+      return false;
+    }
+    if (step === 3) {
+      const { workerRows } = buildEntriesFromMatrix();
+      if (workerRows.length === 0) {
+        toast.error('Please enter worker hours in the matrix');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const goNextWizardStep = () => {
+    if (!validateWizardStep(wizardStep)) return;
+    setWizardStep(prev => Math.min(4, prev + 1) as WizardStep);
+  };
+
+  const initializeWizardFromLog = (log: DailyLog) => {
+    const itemMap = new Map<string, WorkItemDraft>();
+    const hours: Record<string, string> = {};
+    const workerIds = new Set<string>();
+    const equipmentIds = new Set<string>();
+
+    const ensureItem = (entry: Pick<DailyLogEntry, 'area' | 'areaDetail' | 'workCodeId' | 'workCodeName' | 'detail' | 'startTime' | 'endTime'>) => {
+      const key = [entry.area, entry.areaDetail || '', entry.workCodeId, entry.detail, entry.startTime, entry.endTime].join('|');
+      if (!itemMap.has(key)) {
+        itemMap.set(key, createWorkItem({
+          area: entry.area,
+          areaDetail: entry.areaDetail || '',
+          workCodeId: entry.workCodeId,
+          workCodeName: entry.workCodeName,
+          detail: entry.detail?.replace(/\s*\|\s*Work quantity:.*/, '') || '',
+          quantity: entry.detail?.match(/Work quantity:\s*(.*)$/)?.[1] || 'N/A',
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+        }));
+      }
+      return itemMap.get(key)!;
+    };
+
+    log.entries.forEach(entry => {
+      workerIds.add(entry.workerId);
+      const item = ensureItem(entry);
+      hours[matrixKey('worker', entry.workerId, item.id)] = String(entry.hours || '');
+    });
+    log.equipmentUsage.forEach(entry => {
+      equipmentIds.add(entry.equipmentId);
+      const item = ensureItem(entry);
+      hours[matrixKey('equipment', entry.equipmentId, item.id)] = String(entry.hours || '');
+    });
+
+    setWorkItems(Array.from(itemMap.values()).length ? Array.from(itemMap.values()) : [createWorkItem()]);
+    setSelectedWorkerIds(workerIds);
+    setSelectedEquipmentIds(equipmentIds);
+    setMatrixHours(hours);
+    setWizardStep(4);
+  };
+
   const addWorkerEntry = () => setEntries(prev => [...prev, { workerId: '', workerName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' }]);
   const addEqEntry = () => setEqEntries(prev => [...prev, { equipmentId: '', equipmentName: '', startTime: defaultStart(), endTime: defaultEnd(), hours: 8, area: '', areaDetail: '', workCodeId: '', workCodeName: '', detail: '' }]);
 
@@ -304,7 +545,7 @@ export default function DailyLogPage() {
     setEqEntries(prev => prev.map((e, idx) => {
       if (idx !== i) return e;
       if (field === 'equipmentId') {
-        const eq = equipment.find(eq => eq.id === value);
+        const eq = teamEquip.find(eq => eq.id === value);
         return { ...e, equipmentId: value as string, equipmentName: eq?.name || '' };
       }
       if (field === 'workCodeId') {
@@ -327,6 +568,7 @@ export default function DailyLogPage() {
     setEditingLogId(log.id);
     setEntries(log.entries.map(({ id, ...rest }) => rest));
     setEqEntries(log.equipmentUsage.map(({ id, ...rest }) => rest));
+    initializeWizardFromLog(log);
     setSelectedEntryIdx(new Set());
     setSelectedEqIdx(new Set());
     setShowForm(true);
@@ -339,6 +581,7 @@ export default function DailyLogPage() {
     setEqEntries([]);
     setSelectedEntryIdx(new Set());
     setSelectedEqIdx(new Set());
+    resetWizard();
     setShowForm(true);
   };
 
@@ -349,6 +592,7 @@ export default function DailyLogPage() {
     setEqEntries([]);
     setSelectedEntryIdx(new Set());
     setSelectedEqIdx(new Set());
+    resetWizard();
   };
 
   const handleDeleteLog = async (logId: string) => {
@@ -392,13 +636,11 @@ export default function DailyLogPage() {
 
   const handleSubmit = async () => {
     if (isForeman && !requireEngineer()) return;
-    if (entries.length === 0) { toast.error('请至少添加一条工人记录 Please add at least one entry'); return; }
-    if (entries.some(e => !e.workerId || !e.area || !e.areaDetail?.trim() || !e.workCodeId)) { toast.error('请填写完整工人信息 Please fill in all required fields'); return; }
+    if (!validateWizardStep(1) || !validateWizardStep(2) || !validateWizardStep(3)) return;
 
-    if (eqEntries.some(e => !e.equipmentId || !e.area || !e.areaDetail?.trim() || !e.workCodeId)) { toast.error('Please fill in all required equipment fields'); return; }
-
-    const newEntries: DailyLogEntry[] = entries.map((e, i) => ({ ...e, id: `e_${Date.now()}_${i}` }));
-    const newEqEntries: EquipmentUsageEntry[] = eqEntries.map((e, i) => ({ ...e, id: `eu_${Date.now()}_${i}` }));
+    const { workerRows, equipmentRows } = buildEntriesFromMatrix();
+    const newEntries: DailyLogEntry[] = workerRows;
+    const newEqEntries: EquipmentUsageEntry[] = equipmentRows;
 
     if (editingLogId) {
       const log = dailyLogs.find(l => l.id === editingLogId);
@@ -441,6 +683,250 @@ export default function DailyLogPage() {
   }, {} as Record<string, typeof workCodes>);
   const areaNames = workAreas.map(a => a.name).sort();
   const formatArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ');
+  const selectedWorkers = teamWorkers.filter(worker => selectedWorkerIds.has(worker.id));
+  const selectedEquipment = teamEquip.filter(eq => selectedEquipmentIds.has(eq.id));
+  const wizardTotals = buildEntriesFromMatrix();
+  const workerTotalHours = wizardTotals.workerRows.reduce((sum, entry) => sum + entry.hours, 0);
+  const equipmentTotalHours = wizardTotals.equipmentRows.reduce((sum, entry) => sum + entry.hours, 0);
+
+  const renderStepIndicator = () => (
+    <div className="grid grid-cols-4 gap-2">
+      {[
+        [1, '施工内容 Work'],
+        [2, '资源 Resources'],
+        [3, '工时 Hours'],
+        [4, '检查 Review'],
+      ].map(([step, label]) => (
+        <div
+          key={step}
+          className={cn(
+            'rounded-md border px-2 py-2 text-center text-xs font-medium',
+            wizardStep === step ? 'border-primary bg-primary text-primary-foreground' : 'bg-muted/30 text-muted-foreground'
+          )}
+        >
+          <span className="block">Step {step}</span>
+          <span className="hidden sm:block">{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderWorkItemForm = (item: WorkItemDraft, index: number) => (
+    <div key={item.id} className="rounded-lg border bg-muted/10 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">施工内容 {index + 1} Work Item {index + 1}</h3>
+        <Button variant="ghost" size="sm" className="h-8 gap-1 text-destructive hover:text-destructive" onClick={() => removeWorkItem(item.id)}>
+          <Trash2 size={13} /> 删除 Delete
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div>
+          <Label className="text-xs text-muted-foreground">大区域 Area</Label>
+          <Select value={item.area} onValueChange={value => updateWorkItem(item.id, 'area', value)}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="选择大区域 Select area" /></SelectTrigger>
+            <SelectContent>{areaNames.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">具体区域 Detail Area</Label>
+          <Input value={item.areaDetail} onChange={event => updateWorkItem(item.id, 'areaDetail', event.target.value)} placeholder="工长填写具体位置 Fill specific location" className="h-9" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">今日施工代码 Work Code</Label>
+          <Select value={item.workCodeId} onValueChange={value => updateWorkItem(item.id, 'workCodeId', value)}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="选择施工代码 Select work code" /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(codesByCategory).map(([cat, codes]) => (
+                <div key={cat}>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{cat}</div>
+                  {codes.map(wc => <SelectItem key={wc.id} value={wc.id}><span className="font-mono text-xs">{wc.code}</span> {wc.name}</SelectItem>)}
+                </div>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">工作量 Work Quantity</Label>
+          <Input value={item.quantity} onChange={event => updateWorkItem(item.id, 'quantity', event.target.value)} placeholder="手动填写，如 35m / 12m3 / N/A" className="h-9" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">开始 Start</Label>
+          <HalfHourDateTimePicker value={item.startTime} onChange={value => updateWorkItem(item.id, 'startTime', value)} />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">结束 End</Label>
+          <HalfHourDateTimePicker value={item.endTime} onChange={value => updateWorkItem(item.id, 'endTime', value)} />
+        </div>
+        <div className="md:col-span-2">
+          <Label className="text-xs text-muted-foreground">具体工作内容 Work Description</Label>
+          <Input value={item.detail} onChange={event => updateWorkItem(item.id, 'detail', event.target.value)} placeholder="手动填写具体施工内容 Describe work content" className="h-9" />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderResourcePicker = () => (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="rounded-lg border p-3 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Label className="text-sm font-semibold">工人 Workers</Label>
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => setCopyDialogTarget('workers')}>
+            <RotateCcw size={14} /> 复制前一日工人
+          </Button>
+        </div>
+        <Input placeholder="搜索 劳工号/姓名/工种 Search worker" value={bulkPickWorkerSearch} onChange={event => setBulkPickWorkerSearch(event.target.value)} className="h-9" />
+        <div className="max-h-[360px] overflow-y-auto space-y-1.5 pr-1">
+          {teamWorkers.filter(worker => {
+            const q = bulkPickWorkerSearch.trim().toLowerCase();
+            return !q || `${worker.name} ${worker.laborId || ''} ${worker.specialty || ''}`.toLowerCase().includes(q);
+          }).map(worker => (
+            <label key={worker.id} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted/40">
+              <Checkbox checked={selectedWorkerIds.has(worker.id)} onCheckedChange={() => toggleWorkerSelection(worker.id)} />
+              <span className="min-w-0 text-sm">
+                <span className="font-mono font-semibold">{worker.laborId || '-'}</span>
+                <span className="ml-2">{worker.name}</span>
+                {worker.specialty && <span className="ml-2 text-xs text-muted-foreground">{worker.specialty}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">已选择工人：{selectedWorkerIds.size} 人</p>
+      </div>
+
+      <div className="rounded-lg border p-3 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Label className="text-sm font-semibold">设备 Equipment</Label>
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => setCopyDialogTarget('equipment')}>
+            <RotateCcw size={14} /> 复制前一日设备
+          </Button>
+        </div>
+        <Input placeholder="搜索 设备号/名称/型号 Search equipment" value={bulkPickEquipSearch} onChange={event => setBulkPickEquipSearch(event.target.value)} className="h-9" />
+        <div className="max-h-[360px] overflow-y-auto space-y-1.5 pr-1">
+          {teamEquip.filter(eq => {
+            const q = bulkPickEquipSearch.trim().toLowerCase();
+            return !q || `${eq.name} ${eq.equipmentNo || ''} ${eq.model || ''}`.toLowerCase().includes(q);
+          }).map(eq => (
+            <label key={eq.id} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted/40">
+              <Checkbox checked={selectedEquipmentIds.has(eq.id)} onCheckedChange={() => toggleEquipmentSelection(eq.id)} />
+              <span className="min-w-0 text-sm">
+                {eq.equipmentNo && <span className="font-mono text-xs text-muted-foreground">{eq.equipmentNo}</span>}
+                <span className="ml-2">{eq.name}</span>
+                {eq.model && <span className="ml-2 text-xs text-muted-foreground">{eq.model}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">已选择设备：{selectedEquipmentIds.size} 台</p>
+      </div>
+    </div>
+  );
+
+  const renderHoursMatrix = () => (
+    <div className="space-y-4">
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="min-w-[760px] w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="sticky left-0 z-10 bg-muted px-3 py-3 text-left font-medium">人员/设备 Resource</th>
+              {workItems.map((item, index) => (
+                <th key={item.id} className="min-w-[160px] px-3 py-3 text-left align-top font-medium">
+                  <div>施工内容 {index + 1}</div>
+                  <div className="text-xs text-muted-foreground">{formatArea(item)}</div>
+                  <div className="text-xs text-muted-foreground">{item.workCodeName}</div>
+                  <div className="text-xs text-muted-foreground">工作量：{item.quantity}</div>
+                </th>
+              ))}
+              <th className="px-3 py-3 text-left font-medium">合计 Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedWorkers.map(worker => {
+              const total = workItems.reduce((sum, item) => sum + parseHours(matrixHours[matrixKey('worker', worker.id, item.id)] || ''), 0);
+              return (
+                <tr key={`worker_${worker.id}`} className="border-t">
+                  <td className="sticky left-0 z-10 bg-card px-3 py-2">
+                    <div className="font-medium">{worker.laborId || worker.name}</div>
+                    <div className="text-xs text-muted-foreground">{worker.name}</div>
+                  </td>
+                  {workItems.map(item => (
+                    <td key={item.id} className="px-3 py-2">
+                      <Input
+                        inputMode="decimal"
+                        value={matrixHours[matrixKey('worker', worker.id, item.id)] || ''}
+                        onChange={event => setMatrixHours(prev => ({ ...prev, [matrixKey('worker', worker.id, item.id)]: event.target.value }))}
+                        placeholder="h"
+                        className="h-8 w-20"
+                      />
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 font-medium">{Math.round(total * 10) / 10}h</td>
+                </tr>
+              );
+            })}
+            {selectedEquipment.map(eq => {
+              const total = workItems.reduce((sum, item) => sum + parseHours(matrixHours[matrixKey('equipment', eq.id, item.id)] || ''), 0);
+              return (
+                <tr key={`equipment_${eq.id}`} className="border-t bg-muted/10">
+                  <td className="sticky left-0 z-10 bg-card px-3 py-2">
+                    <div className="font-medium">{eq.equipmentNo || eq.name}</div>
+                    <div className="text-xs text-muted-foreground">{eq.name}</div>
+                  </td>
+                  {workItems.map(item => (
+                    <td key={item.id} className="px-3 py-2">
+                      <Input
+                        inputMode="decimal"
+                        value={matrixHours[matrixKey('equipment', eq.id, item.id)] || ''}
+                        onChange={event => setMatrixHours(prev => ({ ...prev, [matrixKey('equipment', eq.id, item.id)]: event.target.value }))}
+                        placeholder="h"
+                        className="h-8 w-20"
+                      />
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 font-medium">{Math.round(total * 10) / 10}h</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">空白表示未参与该施工内容。Blank cells are ignored during submission.</p>
+    </div>
+  );
+
+  const renderReview = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">施工内容</p><p className="text-xl font-semibold">{workItems.length}</p></div>
+        <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">工人</p><p className="text-xl font-semibold">{selectedWorkerIds.size}</p></div>
+        <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">工人工时</p><p className="text-xl font-semibold">{workerTotalHours}h</p></div>
+        <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">设备工时</p><p className="text-xl font-semibold">{equipmentTotalHours}h</p></div>
+      </div>
+      {workItems.map((item, index) => {
+        const workerRows = wizardTotals.workerRows.filter(row => row.area === item.area && row.areaDetail === item.areaDetail && row.workCodeId === item.workCodeId && row.startTime === item.startTime && row.endTime === item.endTime);
+        const equipmentRows = wizardTotals.equipmentRows.filter(row => row.area === item.area && row.areaDetail === item.areaDetail && row.workCodeId === item.workCodeId && row.startTime === item.startTime && row.endTime === item.endTime);
+        return (
+          <div key={item.id} className="rounded-lg border p-3 space-y-2">
+            <div>
+              <h3 className="font-semibold">施工内容 {index + 1}: {formatArea(item)}</h3>
+              <p className="text-sm text-muted-foreground">{item.workCodeName} · {formatDT(item.startTime)} - {formatDT(item.endTime)}</p>
+              <p className="text-sm">{item.detail}</p>
+              <p className="text-sm text-muted-foreground">工作量：{item.quantity}</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">工人 Workers</p>
+                {workerRows.length === 0 ? <p className="text-sm text-muted-foreground">No worker hours</p> : workerRows.map(row => <p key={row.id} className="text-sm">{row.workerName} · {row.hours}h</p>)}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">设备 Equipment</p>
+                {equipmentRows.length === 0 ? <p className="text-sm text-muted-foreground">No equipment hours</p> : equipmentRows.map(row => <p key={row.id} className="text-sm">{row.equipmentName} · {row.hours}h</p>)}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const historyLog = historyLogId ? logs.find(l => l.id === historyLogId) : null;
 
@@ -669,8 +1155,82 @@ export default function DailyLogPage() {
         );
       })()}
 
-      {/* Form - foreman only */}
+      {/* Wizard form - foreman only */}
       {isForeman && showForm && (
+        <div className="bg-card rounded-lg border shadow-sm p-3 mb-6 space-y-5 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-lg leading-snug break-words">
+                {editingLogId ? '修改施工日志 Revise Log' : '今日施工日志 Today\'s Log'} · {editingLogId ? logs.find(l => l.id === editingLogId)?.date : todayLocal()}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                按施工内容、资源、工时矩阵、检查提交四步填写。Fill work items, resources, hours matrix, then review.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={cancelForm}>取消 Cancel</Button>
+          </div>
+
+          {renderStepIndicator()}
+
+          {wizardStep === 1 && (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Label className="text-sm font-semibold">施工内容 Work Items</Label>
+                <Button variant="outline" size="sm" onClick={() => setWorkItems(prev => [...prev, createWorkItem()])} className="gap-1">
+                  <Plus size={14} /> 添加施工内容 Add Work Item
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {workItems.map(renderWorkItemForm)}
+              </div>
+            </div>
+          )}
+
+          {wizardStep === 2 && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-semibold">选择工人和设备 Resources</Label>
+                <p className="text-xs text-muted-foreground mt-1">可以手动选择，也可以从前一日复制列表。Copy buttons only ask for source date.</p>
+              </div>
+              {renderResourcePicker()}
+            </div>
+          )}
+
+          {wizardStep === 3 && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-semibold">填写工时矩阵 Hours Matrix</Label>
+                <p className="text-xs text-muted-foreground mt-1">只填写工时；区域、施工代码、工作内容来自第一步。</p>
+              </div>
+              {renderHoursMatrix()}
+            </div>
+          )}
+
+          {wizardStep === 4 && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-semibold">检查并提交 Review & Submit</Label>
+                <p className="text-xs text-muted-foreground mt-1">提交前请确认施工内容、工人设备工时无误。</p>
+              </div>
+              {renderReview()}
+            </div>
+          )}
+
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="outline" onClick={() => wizardStep === 1 ? cancelForm() : setWizardStep(prev => Math.max(1, prev - 1) as WizardStep)}>
+              {wizardStep === 1 ? '取消 Cancel' : '上一步 Back'}
+            </Button>
+            {wizardStep < 4 ? (
+              <Button onClick={goNextWizardStep}>下一步 Next</Button>
+            ) : (
+              <Button onClick={handleSubmit} className="gap-2"><Send size={15} /> {editingLogId ? '重新提交 Resubmit' : '提交审核 Submit for Review'}</Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Form - foreman only */}
+      {false && isForeman && showForm && (
         <div className="bg-card rounded-lg border shadow-sm p-3 mb-6 space-y-6 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -1062,6 +1622,31 @@ export default function DailyLogPage() {
       )}
 
       <RevisionHistoryDialog log={historyLog || null} open={!!historyLogId} onOpenChange={() => setHistoryLogId(null)} />
+
+      <Dialog open={!!copyDialogTarget} onOpenChange={open => !open && setCopyDialogTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {copyDialogTarget === 'workers' ? '复制前一日工人 Copy Workers' : '复制前一日设备 Copy Equipment'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">来源日期 Source Date</Label>
+              <Input type="date" value={copySourceDate} onChange={event => setCopySourceDate(event.target.value)} className="h-9" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {copyDialogTarget === 'workers'
+                ? '将复制该日期提交过的工人列表，复制后仍可手动增删。'
+                : '将复制该日期使用过的设备列表，复制后仍可手动增删。'}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyDialogTarget(null)}>取消 Cancel</Button>
+            <Button onClick={copyPreviousResources}>复制 Copy</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Bulk add workers dialog */}
       <Dialog open={bulkAddWorkerOpen} onOpenChange={setBulkAddWorkerOpen}>
