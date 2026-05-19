@@ -34,6 +34,7 @@ interface DataContextType {
   // Equipment CRUD
   addEquipment: (eq: Omit<Equipment, 'id'>) => Promise<string>;
   updateEquipment: (id: string, updates: Partial<Omit<Equipment, 'id'>>) => Promise<void>;
+  batchUpdateEquipment: (ids: string[], updates: Partial<Omit<Equipment, 'id'>>) => Promise<void>;
   deleteEquipment: (id: string) => Promise<void>;
   // Team assignment CRUD
   updateTeamAssignment: (foremanId: string, workerIds: string[], equipmentIds: string[]) => Promise<void>;
@@ -568,6 +569,21 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     assertSupabaseOk(error, 'Update equipment');
     await fetchEquipment();
   };
+  const batchUpdateEquipment = async (ids: string[], updates: Partial<Omit<Equipment, 'id'>>) => {
+    if (ids.length === 0) return;
+    const db: any = {};
+    if (updates.equipmentNo !== undefined) db.equipment_no = updates.equipmentNo;
+    if (updates.name !== undefined) db.name = updates.name;
+    if (updates.model !== undefined) db.model = updates.model;
+    if (updates.status !== undefined) db.status = updates.status;
+    if (updates.location !== undefined) db.location = updates.location || null;
+    if (Object.keys(db).length === 0) return;
+    for (const part of chunkArray(ids, MUTATION_CHUNK_SIZE)) {
+      const { error } = await supabase.from('equipment').update(db).in('id', part);
+      assertSupabaseOk(error, 'Batch update equipment');
+    }
+    await fetchEquipment();
+  };
   const deleteEquipment = async (id: string) => {
     const { error } = await supabase.from('equipment').delete().eq('id', id);
     assertSupabaseOk(error, 'Delete equipment');
@@ -786,7 +802,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       batchDeletePersonnel, batchAddPersonnel, importPersonnelBatch,
       addWorkCode, updateWorkCode, deleteWorkCode,
       addWorkArea, updateWorkArea, deleteWorkArea,
-      addEquipment, updateEquipment, deleteEquipment,
+      addEquipment, updateEquipment, batchUpdateEquipment, deleteEquipment,
       updateTeamAssignment, addWorkerToTeam, removeWorkerFromTeam, addEquipmentToTeam, removeEquipmentFromTeam, setTeamAssignmentsBatch,
       setEngineerAssignmentsBatch,
       addDailyLog, updateDailyLog, deleteDailyLog, softDeleteDailyLog, restoreDailyLog, emptyTrash,

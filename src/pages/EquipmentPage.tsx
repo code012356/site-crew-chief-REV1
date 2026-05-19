@@ -6,7 +6,6 @@ import { exportEquipment, importEquipment } from '@/lib/excel-utils';
 import { Plus, Edit2, Trash2, Download, Upload, Send, CheckCircle, XCircle, Clock, Package, PackagePlus, Undo2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { pageTitles, fieldLabels, actionLabels, equipmentStatusLabels, messages } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
+import SearchableSelect from '@/components/SearchableSelect';
 
 const formatUsageArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ') || '-';
 
@@ -25,6 +25,7 @@ export default function EquipmentPage() {
     equipment, personnel, teamAssignments, engineerAssignments, workAreas,
     addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment,
     updateTeamAssignment, setTeamAssignmentsBatch, equipmentRequests, addEquipmentRequest, updateEquipmentRequest, deleteEquipmentRequest,
+    batchUpdateEquipment,
     addEquipmentToTeam, dailyLogs,
   } = useDataContext();
 
@@ -70,6 +71,14 @@ export default function EquipmentPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [form, setForm] = useState({ name: '', equipmentNo: '', model: '', status: 'available' as EquipmentStatus, location: '', assignedForemanIds: [] as string[] });
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([]);
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchForm, setBatchForm] = useState({
+    status: 'keep' as 'keep' | EquipmentStatus,
+    location: 'keep',
+    applyTeams: false,
+    assignedForemanIds: [] as string[],
+  });
 
   // ── Request dialog state (for foreman/engineer) ──
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -97,6 +106,34 @@ export default function EquipmentPage() {
   const [adminComment, setAdminComment] = useState('');
   const [engineerComment, setEngineerComment] = useState('');
   const [newEqForm, setNewEqForm] = useState({ name: '', equipmentNo: '', model: '', location: '' });
+
+  const statusOptions = [
+    { value: 'available', label: equipmentStatusLabels.available },
+    { value: 'in_use', label: equipmentStatusLabels.in_use },
+    { value: 'maintenance', label: equipmentStatusLabels.maintenance },
+    { value: 'retired', label: equipmentStatusLabels.retired },
+  ];
+  const equipmentStatusFilterOptions = [{ value: 'all', label: '全部 All' }, ...statusOptions];
+  const locationSelectOptions = [
+    { value: 'none', label: fieldLabels.unassigned },
+    ...locationOptions.map(area => ({ value: area, label: area })),
+  ];
+  const batchLocationOptions = [
+    { value: 'keep', label: '保持不变 Keep' },
+    { value: 'none', label: fieldLabels.unassigned },
+    ...locationOptions.map(area => ({ value: area, label: area })),
+  ];
+  const foremanSelectOptions = foremen.map(fm => ({
+    value: fm.id,
+    label: fm.name,
+    code: fm.laborId,
+    hint: fm.phone,
+  }));
+  const teamFilterOptions = [
+    { value: 'all', label: '全部 All' },
+    { value: 'unassigned', label: fieldLabels.unassigned },
+    ...foremanSelectOptions,
+  ];
 
   const getAssignedForemen = (eqId: string) => teamAssignments.filter(a => a.equipmentIds.includes(eqId));
   const getAssignedForemanIds = (eqId: string) => getAssignedForemen(eqId).map(a => a.foremanId);
@@ -165,6 +202,45 @@ export default function EquipmentPage() {
       toast.error('保存失败，请重试 Save failed, please retry');
     } finally {
       setSavingEquipment(false);
+    }
+  };
+
+  const openBatchEdit = () => {
+    if (!isEquipmentManager || selectedEquipmentIds.length === 0) return;
+    setBatchForm({ status: 'keep', location: 'keep', applyTeams: false, assignedForemanIds: [] });
+    setBatchDialogOpen(true);
+  };
+
+  const handleBatchSave = async () => {
+    if (!isEquipmentManager || selectedEquipmentIds.length === 0) return;
+    try {
+      const updates: Partial<Equipment> = {};
+      if (batchForm.status !== 'keep') updates.status = batchForm.status;
+      if (batchForm.location !== 'keep') updates.location = batchForm.location === 'none' ? '' : batchForm.location;
+      if (Object.keys(updates).length > 0) {
+        await batchUpdateEquipment(selectedEquipmentIds, updates);
+      }
+      if (batchForm.applyTeams) {
+        const selectedSet = new Set(selectedEquipmentIds);
+        const targetForemen = new Set(batchForm.assignedForemanIds);
+        const next = teamAssignments.map(assignment => {
+          const keptEquipment = assignment.equipmentIds.filter(id => !selectedSet.has(id));
+          const addedEquipment = targetForemen.has(assignment.foremanId) ? selectedEquipmentIds : [];
+          return { ...assignment, equipmentIds: [...new Set([...keptEquipment, ...addedEquipment])] };
+        });
+        for (const foremanId of batchForm.assignedForemanIds) {
+          if (!next.some(assignment => assignment.foremanId === foremanId)) {
+            next.push({ foremanId, workerIds: [], equipmentIds: selectedEquipmentIds });
+          }
+        }
+        await setTeamAssignmentsBatch(next);
+      }
+      toast.success(messages.saved);
+      setSelectedEquipmentIds([]);
+      setBatchDialogOpen(false);
+    } catch (error) {
+      console.error('Batch equipment update failed', error);
+      toast.error('批量保存失败，请重试 Batch save failed');
     }
   };
 
@@ -565,38 +641,61 @@ export default function EquipmentPage() {
           </div>
           <div>
             <Label>状态 Status</Label>
-            <Select value={equipmentStatusFilter} onValueChange={value => setEquipmentStatusFilter(value as 'all' | EquipmentStatus)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部 All</SelectItem>
-                <SelectItem value="available">{equipmentStatusLabels.available}</SelectItem>
-                <SelectItem value="in_use">{equipmentStatusLabels.in_use}</SelectItem>
-                <SelectItem value="maintenance">{equipmentStatusLabels.maintenance}</SelectItem>
-                <SelectItem value="retired">{equipmentStatusLabels.retired}</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={equipmentStatusFilter}
+              onChange={value => setEquipmentStatusFilter(value as 'all' | EquipmentStatus)}
+              options={equipmentStatusFilterOptions}
+              placeholder="全部 All"
+              emptyText={messages.noMatch}
+            />
           </div>
           <div>
             <Label>分配班组 Assigned Team</Label>
-            <Select value={equipmentTeamFilter} onValueChange={setEquipmentTeamFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部 All</SelectItem>
-                <SelectItem value="unassigned">{fieldLabels.unassigned}</SelectItem>
-                {foremen.map(fm => <SelectItem key={fm.id} value={fm.id}>{fm.laborId ? `${fm.laborId} / ` : ''}{fm.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={equipmentTeamFilter}
+              onChange={setEquipmentTeamFilter}
+              options={teamFilterOptions}
+              placeholder="全部 All"
+              emptyText={messages.noMatch}
+            />
           </div>
           <Button variant="outline" onClick={() => { setEquipmentSearch(''); setEquipmentStatusFilter('all'); setEquipmentTeamFilter('all'); }}>
             重置 Reset
           </Button>
         </div>
+        {isEquipmentManager && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const visibleIds = filteredEquipment.map(eq => eq.id);
+                const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedEquipmentIds.includes(id));
+                setSelectedEquipmentIds(allVisibleSelected
+                  ? selectedEquipmentIds.filter(id => !visibleIds.includes(id))
+                  : [...new Set([...selectedEquipmentIds, ...visibleIds])]);
+              }}
+            >
+              全选当前列表 Select Visible
+            </Button>
+            <Button size="sm" onClick={openBatchEdit} disabled={selectedEquipmentIds.length === 0}>
+              批量编辑 Batch Edit ({selectedEquipmentIds.length})
+            </Button>
+            {selectedEquipmentIds.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setSelectedEquipmentIds([])}>
+                清空选择 Clear
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground">仅设备管理员可批量修改设备状态、位置和班组。</span>
+          </div>
+        )}
       </div>
 
       <div className="hidden overflow-x-auto rounded-lg border bg-card shadow-sm md:block">
         <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr className="border-b bg-primary text-primary-foreground">
+              {isEquipmentManager && <th className="w-12 px-4 py-3 text-left font-medium">选</th>}
               <th className="px-4 py-3 text-left font-medium">设备编号 Equipment No.</th>
               <th className="px-4 py-3 text-left font-medium">设备名称 Equipment Name</th>
               <th className="px-4 py-3 text-left font-medium">型号 Model</th>
@@ -612,6 +711,14 @@ export default function EquipmentPage() {
               const canRequest = eq.status === 'available' && !myEquipmentIds.has(eq.id);
               return (
                 <tr key={eq.id} className="hover:bg-muted/40">
+                  {isEquipmentManager && (
+                    <td className="px-4 py-3">
+                      <Checkbox
+                        checked={selectedEquipmentIds.includes(eq.id)}
+                        onCheckedChange={checked => setSelectedEquipmentIds(ids => checked ? [...new Set([...ids, eq.id])] : ids.filter(id => id !== eq.id))}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-mono">{eq.equipmentNo || '-'}</td>
                   <td className="px-4 py-3 font-medium">{eq.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{eq.model || '-'}</td>
@@ -650,9 +757,18 @@ export default function EquipmentPage() {
           return (
             <div key={eq.id} className="rounded-lg border bg-card p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex min-w-0 gap-2">
+                  {isEquipmentManager && (
+                    <Checkbox
+                      className="mt-1"
+                      checked={selectedEquipmentIds.includes(eq.id)}
+                      onCheckedChange={checked => setSelectedEquipmentIds(ids => checked ? [...new Set([...ids, eq.id])] : ids.filter(id => id !== eq.id))}
+                    />
+                  )}
+                  <div className="min-w-0">
                   <div className="font-mono text-sm text-muted-foreground">{eq.equipmentNo || '-'}</div>
                   <div className="font-semibold">{eq.name}</div>
+                  </div>
                 </div>
                 <span className={`status-badge ${eq.status === 'available' ? 'status-approved' : eq.status === 'in_use' ? 'status-pending' : eq.status === 'maintenance' ? 'status-leave' : 'status-resigned'}`}>{equipmentStatusLabels[eq.status]}</span>
               </div>
@@ -728,13 +844,13 @@ export default function EquipmentPage() {
   );
 
   const renderLocationSelect = (value: string, onChange: (value: string) => void) => (
-    <Select value={value || 'none'} onValueChange={next => onChange(next === 'none' ? '' : next)}>
-      <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
-        {locationOptions.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}
-      </SelectContent>
-    </Select>
+    <SearchableSelect
+      value={value || 'none'}
+      onChange={next => onChange(next === 'none' ? '' : next)}
+      options={locationSelectOptions}
+      placeholder={fieldLabels.unassigned}
+      emptyText={messages.noMatch}
+    />
   );
 
   // ── Shared request dialog ──
@@ -760,19 +876,21 @@ export default function EquipmentPage() {
           {requestType === 'existing' ? (
             <div>
               <Label>选择设备 Select Equipment</Label>
-              <Select value={requestForm.equipmentId} onValueChange={v => {
+              <SearchableSelect
+                value={requestForm.equipmentId}
+                onChange={v => {
                 const eq = availableEquipment.find(e => e.id === v);
                 setRequestForm(f => ({ ...f, equipmentId: v, equipmentName: eq?.name || '' }));
-              }}>
-                <SelectTrigger><SelectValue placeholder="请选择设备 Select equipment..." /></SelectTrigger>
-                <SelectContent>
-                  {requestableEquipment.map(eq => (
-                    <SelectItem key={eq.id} value={eq.id}>
-                      {eq.name} {eq.equipmentNo ? `(${eq.equipmentNo})` : ''} - {equipmentStatusLabels[eq.status]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              }}
+                options={requestableEquipment.map(eq => ({
+                  value: eq.id,
+                  label: eq.name,
+                  code: eq.equipmentNo,
+                  hint: `${eq.model || '-'} / ${eq.location || fieldLabels.unassigned} / ${equipmentStatusLabels[eq.status]}`,
+                }))}
+                placeholder="请选择设备 Select equipment..."
+                emptyText={messages.noMatch}
+              />
             </div>
           ) : (
             <div className="space-y-3">
@@ -800,13 +918,16 @@ export default function EquipmentPage() {
               </div>
               <div>
                 <Label>紧急程度 Priority</Label>
-                <Select value={requestForm.priority} onValueChange={priority => setRequestForm(f => ({ ...f, priority: priority as 'normal' | 'urgent' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">普通 Normal</SelectItem>
-                    <SelectItem value="urgent">紧急 Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={requestForm.priority}
+                  onChange={priority => setRequestForm(f => ({ ...f, priority: priority as 'normal' | 'urgent' }))}
+                  options={[
+                    { value: 'normal', label: '普通 Normal' },
+                    { value: 'urgent', label: '紧急 Urgent' },
+                  ]}
+                  placeholder="普通 Normal"
+                  emptyText={messages.noMatch}
+                />
               </div>
             </div>
           )}
@@ -924,13 +1045,13 @@ export default function EquipmentPage() {
                 {selectedRequest.requesterRole === 'engineer' && (
                   <div>
                     <Label>分配给工长 Assign to Foreman</Label>
-                    <Select value={assignForeman} onValueChange={setAssignForeman}>
-                      <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
-                        {foremen.map(fm => <SelectItem key={fm.id} value={fm.id}>{fm.laborId ? `${fm.laborId} / ` : ''}{fm.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={assignForeman || 'none'}
+                      onChange={value => setAssignForeman(value === 'none' ? '' : value)}
+                      options={[{ value: 'none', label: fieldLabels.unassigned }, ...foremanSelectOptions]}
+                      placeholder={fieldLabels.unassigned}
+                      emptyText={messages.noMatch}
+                    />
                   </div>
                 )}
               </div>
@@ -946,13 +1067,13 @@ export default function EquipmentPage() {
             ) : (
               <div>
                 <Label>分配给工长 Assign to Foreman</Label>
-                <Select value={assignForeman} onValueChange={setAssignForeman}>
-                  <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
-                    {foremen.map(fm => <SelectItem key={fm.id} value={fm.id}>{fm.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={assignForeman || 'none'}
+                  onChange={value => setAssignForeman(value === 'none' ? '' : value)}
+                  options={[{ value: 'none', label: fieldLabels.unassigned }, ...foremanSelectOptions]}
+                  placeholder={fieldLabels.unassigned}
+                  emptyText={messages.noMatch}
+                />
                 <p className="text-xs text-muted-foreground mt-1">工程师申请需指定分配工长 Engineer request requires foreman assignment</p>
               </div>
             )}
@@ -966,6 +1087,85 @@ export default function EquipmentPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>{actionLabels.cancel}</Button>
           <Button onClick={handleAdminApproveRequest}>{actionLabels.approveRequest}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const renderBatchEditDialog = () => (
+    <Dialog open={batchDialogOpen && isEquipmentManager} onOpenChange={setBatchDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>批量编辑设备 Batch Edit Equipment</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
+            已选择 {selectedEquipmentIds.length} 台设备。只有设备管理员可以批量修改；工长和工程师不显示此功能。
+          </div>
+          <div>
+            <Label>状态 Status</Label>
+            <SearchableSelect
+              value={batchForm.status}
+              onChange={status => setBatchForm(f => ({ ...f, status: status as 'keep' | EquipmentStatus }))}
+              options={[{ value: 'keep', label: '保持不变 Keep' }, ...statusOptions]}
+              placeholder="保持不变 Keep"
+              emptyText={messages.noMatch}
+            />
+          </div>
+          <div>
+            <Label>位置 Location</Label>
+            <SearchableSelect
+              value={batchForm.location}
+              onChange={location => setBatchForm(f => ({ ...f, location }))}
+              options={batchLocationOptions}
+              placeholder="保持不变 Keep"
+              emptyText={messages.noMatch}
+            />
+          </div>
+          <div className="rounded-md border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={batchForm.applyTeams}
+                onCheckedChange={checked => setBatchForm(f => ({ ...f, applyTeams: Boolean(checked) }))}
+              />
+              覆盖分配班组 Replace assigned teams
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              开启后会用下面选择的班组替换这些设备当前所有班组；不开启则保留原班组。
+            </p>
+            {batchForm.applyTeams && (
+              <div className="mt-3 max-h-56 overflow-y-auto rounded-md border p-2">
+                <Input
+                  value={foremanSearch}
+                  onChange={e => setForemanSearch(e.target.value)}
+                  placeholder="搜索工长 Labor no. / name / phone"
+                  className="mb-2"
+                />
+                <div className="space-y-1">
+                  {filteredForemen.map(fm => (
+                    <label key={fm.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/40">
+                      <Checkbox
+                        checked={batchForm.assignedForemanIds.includes(fm.id)}
+                        onCheckedChange={checked => setBatchForm(f => ({
+                          ...f,
+                          assignedForemanIds: checked
+                            ? [...new Set([...f.assignedForemanIds, fm.id])]
+                            : f.assignedForemanIds.filter(id => id !== fm.id),
+                        }))}
+                      />
+                      <span>{fm.name}</span>
+                      {fm.laborId && <span className="font-mono text-xs text-muted-foreground">{fm.laborId}</span>}
+                    </label>
+                  ))}
+                  {filteredForemen.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">{messages.noMatch}</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>{actionLabels.cancel}</Button>
+          <Button onClick={handleBatchSave}>保存批量修改 Save Batch</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1127,15 +1327,13 @@ export default function EquipmentPage() {
               </div>
               <div>
                 <Label>{fieldLabels.status}</Label>
-                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as EquipmentStatus }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="available">{equipmentStatusLabels.available}</SelectItem>
-                    <SelectItem value="in_use">{equipmentStatusLabels.in_use}</SelectItem>
-                    <SelectItem value="maintenance">{equipmentStatusLabels.maintenance}</SelectItem>
-                    <SelectItem value="retired">{equipmentStatusLabels.retired}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.status}
+                  onChange={status => setForm(f => ({ ...f, status: status as EquipmentStatus }))}
+                  options={statusOptions}
+                  placeholder={equipmentStatusLabels.available}
+                  emptyText={messages.noMatch}
+                />
               </div>
               <div>
                 <Label>{fieldLabels.assignedTeam}</Label>
@@ -1177,6 +1375,7 @@ export default function EquipmentPage() {
         </Dialog>
 
         {renderAdminApproveDialog()}
+        {renderBatchEditDialog()}
       </div>
     );
   }
