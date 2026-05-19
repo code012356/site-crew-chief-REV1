@@ -33,7 +33,7 @@ export default function PersonnelPage() {
   const {
     personnel, teamAssignments, engineerAssignments,
     addPersonnel, updatePersonnel, deletePersonnel: dbDeletePersonnel,
-    batchDeletePersonnel, batchAddPersonnel,
+    batchDeletePersonnel, batchAddPersonnel, importPersonnelBatch,
     updateTeamAssignment, setTeamAssignmentsBatch, setEngineerAssignmentsBatch,
   } = useDataContext();
   const { accounts, currentRole } = useAppContext();
@@ -486,6 +486,7 @@ export default function PersonnelPage() {
 
   const [importGuideOpen, setImportGuideOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const normalizeImportKey = (value?: string) => (value || '').trim().toUpperCase();
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -496,18 +497,31 @@ export default function PersonnelPage() {
         return;
       }
       // Deduplicate: compare against existing personnel
+      const existingByLaborId = new Map<string, Personnel>();
+      const existingByCodeNo = new Map<string, Personnel>();
+      personnel.forEach(existing => {
+        const laborKey = normalizeImportKey(existing.laborId);
+        const codeKey = normalizeImportKey(existing.codeNo);
+        if (laborKey) existingByLaborId.set(laborKey, existing);
+        if (codeKey) existingByCodeNo.set(codeKey, existing);
+      });
+      const seenLaborIds = new Set<string>();
       const candidates: ImportCandidate[] = imported.map(p => {
         let isDuplicate = false;
         let matchedId: string | undefined;
         let matchReason: string | undefined;
+        const laborKey = normalizeImportKey(p.laborId);
+        const codeKey = normalizeImportKey(p.codeNo);
         // Match by laborId (most reliable)
-        if (p.laborId) {
-          const match = personnel.find(ex => ex.laborId && ex.laborId === p.laborId);
+        if (laborKey) {
+          const match = existingByLaborId.get(laborKey);
+          if (!match && seenLaborIds.has(laborKey)) { isDuplicate = true; matchReason = `Excel duplicate Labor ID: ${p.laborId}`; }
+          seenLaborIds.add(laborKey);
           if (match) { isDuplicate = true; matchedId = match.id; matchReason = `胸卡号匹配 Labor ID: ${p.laborId}`; }
         }
         // Match by codeNo
-        if (!isDuplicate && p.codeNo) {
-          const match = personnel.find(ex => ex.codeNo && ex.codeNo === p.codeNo);
+        if (!isDuplicate && codeKey) {
+          const match = existingByCodeNo.get(codeKey);
           if (match) { isDuplicate = true; matchedId = match.id; matchReason = `工号匹配 Code No: ${p.codeNo}`; }
         }
         // Match by name + nationality
@@ -532,20 +546,24 @@ export default function PersonnelPage() {
     if (toImport.length === 0) { toast.error('未选择任何数据 No data selected'); return; }
     setImportSubmitting(true);
     try {
-    const addedIds = await batchAddPersonnel(toImport.map(c => c.data));
-    pushUndo({ type: 'batch_add', ids: addedIds, description: `Import ${addedIds.length} personnel` });
+    const importResult = await importPersonnelBatch(toImport.map(c => c.data));
+    const importedIds = importResult.ids;
+    const addedIds = importResult.addedIds;
+    if (addedIds.length > 0) {
+      pushUndo({ type: 'batch_add', ids: addedIds, description: `Import ${addedIds.length} personnel` });
+    }
 
     // Auto-link imported workers to foremen by matching assignedTo text
     // against foreman laborId or name parts. Includes BOTH existing foremen
     // and foremen just imported in this batch (so a one-shot import that
     // contains both foremen and workers still wires up assignments).
-    const newlyAddedFm = addedIds
+    const importedForemen = importedIds
       .map((id, idx) => ({ id, data: toImport[idx].data }))
       .filter(x => x.data.role === 'foreman')
       .map(x => ({ ...x.data, id: x.id } as Personnel));
     const allFm = [
       ...personnel.filter(p => p.role === 'foreman' && p.status !== 'resigned'),
-      ...newlyAddedFm,
+      ...importedForemen,
     ];
     const matchForeman = (tag: string) => {
       const t = (tag || '').trim();
@@ -564,7 +582,7 @@ export default function PersonnelPage() {
     };
     let linkCount = 0;
     const fmToWorkerIds = new Map<string, string[]>();
-    addedIds.forEach((id, idx) => {
+    importedIds.forEach((id, idx) => {
       const cand = toImport[idx];
       if (cand.data.role !== 'worker') return;
       const fm = matchForeman(cand.data.assignedTo || '');
@@ -582,7 +600,7 @@ export default function PersonnelPage() {
       }
       await setTeamAssignmentsBatch(updated);
     }
-    toast.success(`成功导入 ${addedIds.length} 人，自动关联工长 ${linkCount} 人 Imported, ${linkCount} auto-linked`);
+    toast.success(`Import complete: added ${addedIds.length}, updated ${importResult.updatedIds.length}, auto-linked ${linkCount}`);
     setImportPreviewOpen(false);
     setImportCandidates([]);
     setImportSelected(new Set());

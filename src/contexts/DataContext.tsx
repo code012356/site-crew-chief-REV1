@@ -23,6 +23,7 @@ interface DataContextType {
   batchUpdatePersonnelStatus: (ids: string[], status: PersonnelStatus) => Promise<void>;
   batchDeletePersonnel: (ids: string[]) => Promise<void>;
   batchAddPersonnel: (list: Omit<Personnel, 'id'>[]) => Promise<string[]>;
+  importPersonnelBatch: (list: Omit<Personnel, 'id'>[]) => Promise<{ ids: string[]; addedIds: string[]; updatedIds: string[] }>;
   // Work code CRUD
   addWorkCode: (wc: Omit<WorkCode, 'id'>) => Promise<void>;
   updateWorkCode: (id: string, updates: Partial<Omit<WorkCode, 'id'>>) => Promise<void>;
@@ -83,6 +84,20 @@ function isMissingLeaveColumnError(error: any) {
 function withoutLeaveFields<T extends Record<string, any>>(row: T) {
   const { leave_date, leave_count, ...fallbackRow } = row;
   return fallbackRow;
+}
+
+function toPersonnelDbRow(p: Omit<Personnel, 'id'>) {
+  return {
+    labor_id: p.laborId || null, code_no: p.codeNo || null,
+    passport_no: p.passportNo || null, visa_expiry_date: p.visaExpiryDate || null,
+    name: p.name, role: p.role, phone: p.phone,
+    status: p.status, specialty: p.specialty || null,
+    nationality: p.nationality || null, join_date: p.joinDate,
+    project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
+    work_line: p.workLine || null, actual_work: p.actualWork || null,
+    leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
+    seq_no: p.seqNo || null,
+  };
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
@@ -296,17 +311,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Personnel CRUD ──
   const addPersonnel = async (p: Omit<Personnel, 'id'>): Promise<string> => {
-    const row = {
-      labor_id: p.laborId || null, code_no: p.codeNo || null,
-      passport_no: p.passportNo || null, visa_expiry_date: p.visaExpiryDate || null,
-      name: p.name, role: p.role, phone: p.phone,
-      status: p.status, specialty: p.specialty || null,
-      nationality: p.nationality || null, join_date: p.joinDate,
-      project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
-      work_line: p.workLine || null, actual_work: p.actualWork || null,
-      leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
-      seq_no: p.seqNo || null,
-    };
+    const row = toPersonnelDbRow(p);
     let { data, error } = await supabase.from('personnel').insert(row).select('id').single();
     if (error && isMissingLeaveColumnError(error)) {
       ({ data, error } = await supabase.from('personnel').insert(withoutLeaveFields(row)).select('id').single());
@@ -403,17 +408,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const batchAddPersonnel = async (list: Omit<Personnel, 'id'>[]): Promise<string[]> => {
     if (list.length === 0) return [];
-    const rows = list.map(p => ({
-      labor_id: p.laborId || null, code_no: p.codeNo || null,
-      passport_no: p.passportNo || null, visa_expiry_date: p.visaExpiryDate || null,
-      name: p.name, role: p.role, phone: p.phone,
-      status: p.status, specialty: p.specialty || null,
-      nationality: p.nationality || null, join_date: p.joinDate,
-      project_dept: p.projectDept || null, assigned_to: p.assignedTo || null,
-      work_line: p.workLine || null, actual_work: p.actualWork || null,
-      leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
-      seq_no: p.seqNo || null,
-    }));
+    const rows = list.map(toPersonnelDbRow);
     const rowsWithoutLeaveFields = rows.map(withoutLeaveFields);
     const inserted: any[] = [];
     for (const part of chunkArray(rows, MUTATION_CHUNK_SIZE)) {
@@ -430,6 +425,57 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
     await fetchPersonnel();
     return inserted.map((r: any) => r.id);
+  };
+
+  const importPersonnelBatch = async (list: Omit<Personnel, 'id'>[]): Promise<{ ids: string[]; addedIds: string[]; updatedIds: string[] }> => {
+    if (list.length === 0) return { ids: [], addedIds: [], updatedIds: [] };
+
+    const laborIds = Array.from(new Set(list.map(p => p.laborId?.trim()).filter(Boolean) as string[]));
+    const existingByLaborId = new Map<string, string>();
+    for (const part of chunkArray(laborIds, MUTATION_CHUNK_SIZE)) {
+      const { data, error } = await supabase
+        .from('personnel')
+        .select('id,labor_id')
+        .in('labor_id', part);
+      assertSupabaseOk(error, 'Find existing personnel');
+      (data || []).forEach((row: any) => {
+        if (row.labor_id) existingByLaborId.set(row.labor_id, row.id);
+      });
+    }
+
+    const ids: string[] = [];
+    const addedIds: string[] = [];
+    const updatedIds: string[] = [];
+
+    for (const person of list) {
+      const row = toPersonnelDbRow(person);
+      const laborId = person.laborId?.trim();
+      const existingId = laborId ? existingByLaborId.get(laborId) : undefined;
+
+      if (existingId) {
+        let { error } = await supabase.from('personnel').update(row).eq('id', existingId);
+        if (error && isMissingLeaveColumnError(error)) {
+          ({ error } = await supabase.from('personnel').update(withoutLeaveFields(row)).eq('id', existingId));
+        }
+        assertSupabaseOk(error, 'Update imported personnel');
+        ids.push(existingId);
+        if (!updatedIds.includes(existingId)) updatedIds.push(existingId);
+        continue;
+      }
+
+      let { data, error } = await supabase.from('personnel').insert(row).select('id').single();
+      if (error && isMissingLeaveColumnError(error)) {
+        ({ data, error } = await supabase.from('personnel').insert(withoutLeaveFields(row)).select('id').single());
+      }
+      assertSupabaseOk(error, 'Add imported personnel');
+      const id = data?.id || '';
+      ids.push(id);
+      addedIds.push(id);
+      if (laborId && id) existingByLaborId.set(laborId, id);
+    }
+
+    await fetchPersonnel();
+    return { ids, addedIds, updatedIds };
   };
 
   // ── Work code CRUD ──
@@ -700,7 +746,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       personnel, equipment, teamAssignments, workCodes, workAreas, engineerAssignments, dailyLogs, equipmentRequests,
       getTeamWorkers, getTeamEquipment, getAvailableWorkers, getAvailableEquipment, getEngineerForemen,
       addPersonnel, updatePersonnel, deletePersonnel, batchUpdatePersonnelStatus,
-      batchDeletePersonnel, batchAddPersonnel,
+      batchDeletePersonnel, batchAddPersonnel, importPersonnelBatch,
       addWorkCode, updateWorkCode, deleteWorkCode,
       addWorkArea, updateWorkArea, deleteWorkArea,
       addEquipment, updateEquipment, deleteEquipment,
