@@ -35,6 +35,7 @@ interface DataContextType {
   addEquipment: (eq: Omit<Equipment, 'id'>) => Promise<string>;
   updateEquipment: (id: string, updates: Partial<Omit<Equipment, 'id'>>) => Promise<void>;
   batchUpdateEquipment: (ids: string[], updates: Partial<Omit<Equipment, 'id'>>) => Promise<void>;
+  batchDeleteEquipment: (ids: string[]) => Promise<void>;
   deleteEquipment: (id: string) => Promise<void>;
   // Team assignment CRUD
   updateTeamAssignment: (foremanId: string, workerIds: string[], equipmentIds: string[]) => Promise<void>;
@@ -584,6 +585,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
     await fetchEquipment();
   };
+  const batchDeleteEquipment = async (ids: string[]) => {
+    await deleteRowsByIds('equipment', 'id', ids);
+    await fetchEquipment();
+  };
   const deleteEquipment = async (id: string) => {
     const { error } = await supabase.from('equipment').delete().eq('id', id);
     assertSupabaseOk(error, 'Delete equipment');
@@ -802,7 +807,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       batchDeletePersonnel, batchAddPersonnel, importPersonnelBatch,
       addWorkCode, updateWorkCode, deleteWorkCode,
       addWorkArea, updateWorkArea, deleteWorkArea,
-      addEquipment, updateEquipment, batchUpdateEquipment, deleteEquipment,
+      addEquipment, updateEquipment, batchUpdateEquipment, batchDeleteEquipment, deleteEquipment,
       updateTeamAssignment, addWorkerToTeam, removeWorkerFromTeam, addEquipmentToTeam, removeEquipmentFromTeam, setTeamAssignmentsBatch,
       setEngineerAssignmentsBatch,
       addDailyLog, updateDailyLog, deleteDailyLog, softDeleteDailyLog, restoreDailyLog, emptyTrash,

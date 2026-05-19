@@ -26,7 +26,7 @@ export default function EquipmentPage() {
     equipment, personnel, teamAssignments, engineerAssignments, workAreas,
     addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment,
     updateTeamAssignment, setTeamAssignmentsBatch, equipmentRequests, addEquipmentRequest, updateEquipmentRequest, deleteEquipmentRequest,
-    batchUpdateEquipment,
+    batchUpdateEquipment, batchDeleteEquipment,
     addEquipmentToTeam, dailyLogs,
   } = useDataContext();
 
@@ -74,6 +74,8 @@ export default function EquipmentPage() {
   const [form, setForm] = useState({ name: '', equipmentNo: '', model: '', status: 'available' as EquipmentStatus, location: '', assignedForemanIds: [] as string[] });
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([]);
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState('');
   const [batchForm, setBatchForm] = useState({
     status: 'keep' as 'keep' | EquipmentStatus,
     location: 'keep',
@@ -243,6 +245,41 @@ export default function EquipmentPage() {
     } catch (error) {
       console.error('Batch equipment update failed', error);
       toast.error('批量保存失败，请重试 Batch save failed');
+    }
+  };
+
+  const selectedEquipmentForDelete = useMemo(
+    () => equipment.filter(eq => selectedEquipmentIds.includes(eq.id)),
+    [equipment, selectedEquipmentIds]
+  );
+
+  const selectedEquipmentAssignedTeams = useMemo(() => {
+    const selected = new Set(selectedEquipmentIds);
+    return teamAssignments
+      .filter(assignment => assignment.equipmentIds.some(id => selected.has(id)))
+      .map(assignment => {
+        const fm = personnel.find(p => p.id === assignment.foremanId);
+        return fm?.laborId || fm?.name || assignment.foremanId;
+      });
+  }, [selectedEquipmentIds, teamAssignments, personnel]);
+
+  const handleBatchDelete = async () => {
+    if (!isEquipmentManager || selectedEquipmentIds.length === 0 || batchDeleteConfirm !== 'DELETE') return;
+    try {
+      const selected = new Set(selectedEquipmentIds);
+      const nextAssignments = teamAssignments.map(assignment => ({
+        ...assignment,
+        equipmentIds: assignment.equipmentIds.filter(id => !selected.has(id)),
+      }));
+      await setTeamAssignmentsBatch(nextAssignments);
+      await batchDeleteEquipment(selectedEquipmentIds);
+      toast.success(messages.deleted);
+      setSelectedEquipmentIds([]);
+      setBatchDeleteConfirm('');
+      setBatchDeleteDialogOpen(false);
+    } catch (error) {
+      console.error('Batch equipment delete failed', error);
+      toast.error('批量删除失败，请重试 Batch delete failed');
     }
   };
 
@@ -693,6 +730,15 @@ export default function EquipmentPage() {
             </Button>
             <Button size="sm" onClick={openBatchEdit} disabled={selectedEquipmentIds.length === 0}>
               批量编辑 Batch Edit ({selectedEquipmentIds.length})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setBatchDeleteConfirm(''); setBatchDeleteDialogOpen(true); }}
+              disabled={selectedEquipmentIds.length === 0}
+              className="text-destructive hover:text-destructive"
+            >
+              批量删除 Batch Delete ({selectedEquipmentIds.length})
             </Button>
             {selectedEquipmentIds.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setSelectedEquipmentIds([])}>
@@ -1212,6 +1258,62 @@ export default function EquipmentPage() {
     </Dialog>
   );
 
+  const renderBatchDeleteDialog = () => (
+    <Dialog open={batchDeleteDialogOpen && isEquipmentManager} onOpenChange={setBatchDeleteDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>批量删除设备 Batch Delete Equipment</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <p className="font-medium text-destructive">
+              将删除 {selectedEquipmentIds.length} 台设备，并同步从班组分配中移除。
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              历史施工日志中的设备使用记录会保留。此操作不可恢复。
+            </p>
+          </div>
+          {selectedEquipmentForDelete.length > 0 && (
+            <div className="max-h-40 overflow-y-auto rounded-md border p-2 text-sm">
+              {selectedEquipmentForDelete.slice(0, 12).map(eq => (
+                <div key={eq.id} className="flex justify-between gap-3 border-b py-1.5 last:border-b-0">
+                  <span className="font-medium">{eq.name}</span>
+                  <span className="font-mono text-muted-foreground">{eq.equipmentNo || '-'}</span>
+                </div>
+              ))}
+              {selectedEquipmentForDelete.length > 12 && (
+                <p className="pt-2 text-xs text-muted-foreground">另有 {selectedEquipmentForDelete.length - 12} 台设备...</p>
+              )}
+            </div>
+          )}
+          {selectedEquipmentAssignedTeams.length > 0 && (
+            <div className="rounded-md border p-3 text-sm text-muted-foreground">
+              当前涉及班组：{[...new Set(selectedEquipmentAssignedTeams)].join(' / ')}
+            </div>
+          )}
+          <div>
+            <Label>输入 DELETE 确认 Type DELETE to confirm</Label>
+            <Input
+              value={batchDeleteConfirm}
+              onChange={e => setBatchDeleteConfirm(e.target.value)}
+              placeholder="DELETE"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setBatchDeleteDialogOpen(false)}>{actionLabels.cancel}</Button>
+          <Button
+            variant="destructive"
+            onClick={handleBatchDelete}
+            disabled={batchDeleteConfirm !== 'DELETE'}
+          >
+            确认删除 Confirm Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ── Request list card ──
   const isMyRequest = (req: EquipmentRequest) => req.requesterId === currentPersonnelId;
 
@@ -1417,6 +1519,7 @@ export default function EquipmentPage() {
 
         {renderAdminApproveDialog()}
         {renderBatchEditDialog()}
+        {renderBatchDeleteDialog()}
       </div>
     );
   }
