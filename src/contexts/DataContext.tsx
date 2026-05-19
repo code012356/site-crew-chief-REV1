@@ -75,6 +75,16 @@ function isMissingAreaColumnError(error: any) {
   return text.includes('area') && (text.includes('column') || text.includes('schema cache'));
 }
 
+function isMissingLeaveColumnError(error: any) {
+  const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+  return /leave_(date|count)/.test(text) && (text.includes('column') || text.includes('schema cache'));
+}
+
+function withoutLeaveFields<T extends Record<string, any>>(row: T) {
+  const { leave_date, leave_count, ...fallbackRow } = row;
+  return fallbackRow;
+}
+
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
@@ -286,7 +296,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // ── Personnel CRUD ──
   const addPersonnel = async (p: Omit<Personnel, 'id'>): Promise<string> => {
-    const { data, error } = await supabase.from('personnel').insert({
+    const row = {
       labor_id: p.laborId || null, code_no: p.codeNo || null,
       passport_no: p.passportNo || null, visa_expiry_date: p.visaExpiryDate || null,
       name: p.name, role: p.role, phone: p.phone,
@@ -296,7 +306,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       work_line: p.workLine || null, actual_work: p.actualWork || null,
       leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
       seq_no: p.seqNo || null,
-    }).select('id').single();
+    };
+    let { data, error } = await supabase.from('personnel').insert(row).select('id').single();
+    if (error && isMissingLeaveColumnError(error)) {
+      ({ data, error } = await supabase.from('personnel').insert(withoutLeaveFields(row)).select('id').single());
+    }
     assertSupabaseOk(error, 'Add personnel');
     await fetchPersonnel();
     return data?.id || '';
@@ -322,7 +336,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.leaveDate !== undefined) db.leave_date = updates.leaveDate || null;
     if (updates.leaveCount !== undefined) db.leave_count = updates.leaveCount || 0;
     if (updates.seqNo !== undefined) db.seq_no = updates.seqNo || null;
-    const { error } = await supabase.from('personnel').update(db).eq('id', id);
+    let { error } = await supabase.from('personnel').update(db).eq('id', id);
+    if (error && isMissingLeaveColumnError(error)) {
+      const fallbackDb = withoutLeaveFields(db);
+      if (Object.keys(fallbackDb).length > 0) {
+        ({ error } = await supabase.from('personnel').update(fallbackDb).eq('id', id));
+      } else {
+        error = null;
+      }
+    }
     assertSupabaseOk(error, 'Update personnel');
     await fetchPersonnel();
   };
@@ -392,11 +414,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       leave_date: p.leaveDate || null, leave_count: p.leaveCount || 0,
       seq_no: p.seqNo || null,
     }));
-    const rowsWithoutLeaveFields = rows.map(({ leave_date, leave_count, ...row }) => row);
+    const rowsWithoutLeaveFields = rows.map(withoutLeaveFields);
     const inserted: any[] = [];
     for (const part of chunkArray(rows, MUTATION_CHUNK_SIZE)) {
       let { data, error } = await supabase.from('personnel').insert(part).select('id');
-      if (error && /leave_(date|count).*schema cache/i.test(error.message || '')) {
+      if (error && isMissingLeaveColumnError(error)) {
         const start = inserted.length;
         const fallbackPart = rowsWithoutLeaveFields.slice(start, start + part.length);
         const fallback = await supabase.from('personnel').insert(fallbackPart).select('id');

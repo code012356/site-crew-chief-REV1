@@ -239,6 +239,8 @@ export type Database = {
           id: string
           join_date: string
           labor_id: string | null
+          leave_count: number
+          leave_date: string | null
           leave_records_2025: string | null
           leave_records_2026: string | null
           name: string
@@ -264,6 +266,8 @@ export type Database = {
           id?: string
           join_date?: string
           labor_id?: string | null
+          leave_count?: number
+          leave_date?: string | null
           leave_records_2025?: string | null
           leave_records_2026?: string | null
           name: string
@@ -289,6 +293,8 @@ export type Database = {
           id?: string
           join_date?: string
           labor_id?: string | null
+          leave_count?: number
+          leave_date?: string | null
           leave_records_2025?: string | null
           leave_records_2026?: string | null
           name?: string
