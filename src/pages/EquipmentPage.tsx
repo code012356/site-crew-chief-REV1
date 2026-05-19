@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useDataContext } from '@/contexts/DataContext';
 import { useAppContext } from '@/contexts/AppContext';
 import { Equipment, EquipmentStatus, EquipmentRequestType, EquipmentRequest } from '@/lib/types';
@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import SearchableSelect from '@/components/SearchableSelect';
 
 const formatUsageArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ') || '-';
+const EQUIPMENT_PAGE_SIZE = 8;
 
 export default function EquipmentPage() {
   const { currentRole, currentPersonnelId, currentUserName } = useAppContext();
@@ -97,6 +98,7 @@ export default function EquipmentPage() {
   const [equipmentSearch, setEquipmentSearch] = useState('');
   const [equipmentStatusFilter, setEquipmentStatusFilter] = useState<'all' | EquipmentStatus>('all');
   const [equipmentTeamFilter, setEquipmentTeamFilter] = useState('all');
+  const [equipmentPage, setEquipmentPage] = useState(1);
 
   // ── Admin/Engineer approve dialog state ──
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
@@ -540,6 +542,17 @@ export default function EquipmentPage() {
     });
   }, [equipment, equipmentSearch, equipmentStatusFilter, equipmentTeamFilter, teamAssignments, personnel]);
 
+  useEffect(() => {
+    setEquipmentPage(1);
+  }, [equipmentSearch, equipmentStatusFilter, equipmentTeamFilter]);
+
+  const equipmentPageCount = Math.max(1, Math.ceil(filteredEquipment.length / EQUIPMENT_PAGE_SIZE));
+  const currentEquipmentPage = Math.min(equipmentPage, equipmentPageCount);
+  const paginatedEquipment = useMemo(() => {
+    const start = (currentEquipmentPage - 1) * EQUIPMENT_PAGE_SIZE;
+    return filteredEquipment.slice(start, start + EQUIPMENT_PAGE_SIZE);
+  }, [filteredEquipment, currentEquipmentPage]);
+
   const visibleEquipmentUsageLogs = useMemo(() => {
     const visibleForemanIds = new Set<string>();
     if (currentRole === 'foreman') {
@@ -669,14 +682,14 @@ export default function EquipmentPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                const visibleIds = filteredEquipment.map(eq => eq.id);
+                const visibleIds = paginatedEquipment.map(eq => eq.id);
                 const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedEquipmentIds.includes(id));
                 setSelectedEquipmentIds(allVisibleSelected
                   ? selectedEquipmentIds.filter(id => !visibleIds.includes(id))
                   : [...new Set([...selectedEquipmentIds, ...visibleIds])]);
               }}
             >
-              全选当前列表 Select Visible
+              全选本页 Select Page
             </Button>
             <Button size="sm" onClick={openBatchEdit} disabled={selectedEquipmentIds.length === 0}>
               批量编辑 Batch Edit ({selectedEquipmentIds.length})
@@ -686,7 +699,7 @@ export default function EquipmentPage() {
                 清空选择 Clear
               </Button>
             )}
-            <span className="text-xs text-muted-foreground">仅设备管理员可批量修改设备状态、位置和班组。</span>
+            <span className="text-xs text-muted-foreground">每页显示 8 条；仅设备管理员可批量修改设备状态、位置和班组。</span>
           </div>
         )}
       </div>
@@ -706,7 +719,7 @@ export default function EquipmentPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filteredEquipment.map(eq => {
+            {paginatedEquipment.map(eq => {
               const teams = getAssignedForemanNames(eq.id);
               const canRequest = eq.status === 'available' && !myEquipmentIds.has(eq.id);
               return (
@@ -751,7 +764,7 @@ export default function EquipmentPage() {
       </div>
 
       <div className="space-y-3 md:hidden">
-        {filteredEquipment.map(eq => {
+        {paginatedEquipment.map(eq => {
           const teams = getAssignedForemanNames(eq.id);
           const canRequest = eq.status === 'available' && !myEquipmentIds.has(eq.id);
           return (
@@ -797,6 +810,34 @@ export default function EquipmentPage() {
         })}
         {filteredEquipment.length === 0 && <div className="rounded-lg border bg-card px-4 py-10 text-center text-muted-foreground">{messages.noMatch}</div>}
       </div>
+      {filteredEquipment.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-lg border bg-card px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-muted-foreground">
+            显示 Showing {(currentEquipmentPage - 1) * EQUIPMENT_PAGE_SIZE + 1}-{Math.min(currentEquipmentPage * EQUIPMENT_PAGE_SIZE, filteredEquipment.length)} / {filteredEquipment.length}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEquipmentPage(page => Math.max(1, page - 1))}
+              disabled={currentEquipmentPage <= 1}
+            >
+              上一页 Prev
+            </Button>
+            <span className="min-w-20 text-center text-sm font-medium">
+              {currentEquipmentPage} / {equipmentPageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEquipmentPage(page => Math.min(equipmentPageCount, page + 1))}
+              disabled={currentEquipmentPage >= equipmentPageCount}
+            >
+              下一页 Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
