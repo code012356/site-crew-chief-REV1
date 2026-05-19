@@ -31,14 +31,40 @@ function splitDateTime(value: string) {
   return { date, time: `${hour.padStart(2, '0')}:${normalizedMinute}` };
 }
 
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
 function HalfHourDateTimePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const current = splitDateTime(value);
   const setDate = (date: string) => onChange(`${date}T${current.time}`);
   const setTime = (time: string) => onChange(`${current.date}T${time}`);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-2 sm:grid-cols-[1.35fr_0.9fr]">
-      <Input type="date" value={current.date} onChange={e => setDate(e.target.value)} className="h-9 min-w-0 text-xs" />
+    <div className="grid grid-cols-[minmax(8.25rem,1fr)_5rem] gap-2 sm:grid-cols-[minmax(8.25rem,1.35fr)_0.9fr]">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 min-w-0 justify-start px-2 text-left font-normal text-xs"
+          >
+            <CalendarIcon size={14} className="mr-1.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{current.date}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={6} collisionPadding={16}>
+          <Calendar
+            mode="single"
+            selected={parseLocalDate(current.date)}
+            onSelect={date => date && setDate(format(date, 'yyyy-MM-dd'))}
+            initialFocus
+            className={cn("p-3 pointer-events-auto")}
+          />
+        </PopoverContent>
+      </Popover>
       <Select value={current.time} onValueChange={setTime}>
         <SelectTrigger className="h-9 min-w-0 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent className="max-h-64">
@@ -301,6 +327,18 @@ export default function DailyLogPage() {
     setEditingLogId(log.id);
     setEntries(log.entries.map(({ id, ...rest }) => rest));
     setEqEntries(log.equipmentUsage.map(({ id, ...rest }) => rest));
+    setSelectedEntryIdx(new Set());
+    setSelectedEqIdx(new Set());
+    setShowForm(true);
+  };
+
+  const startNewLog = () => {
+    if (!requireEngineer()) return;
+    setEditingLogId(null);
+    setEntries([]);
+    setEqEntries([]);
+    setSelectedEntryIdx(new Set());
+    setSelectedEqIdx(new Set());
     setShowForm(true);
   };
 
@@ -309,6 +347,8 @@ export default function DailyLogPage() {
     setEditingLogId(null);
     setEntries([]);
     setEqEntries([]);
+    setSelectedEntryIdx(new Set());
+    setSelectedEqIdx(new Set());
   };
 
   const handleDeleteLog = async (logId: string) => {
@@ -453,7 +493,7 @@ export default function DailyLogPage() {
           )}
           {isForeman && !showForm && !showTrash && (
             <Button
-              onClick={() => { if (!requireEngineer()) return; setShowForm(true); setEditingLogId(null); addWorkerEntry(); }}
+              onClick={startNewLog}
               disabled={!hasEngineer}
               className="gap-2"
             >

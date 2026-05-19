@@ -16,13 +16,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { pageTitles, fieldLabels, actionLabels, equipmentStatusLabels, messages } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
 
+const formatLogDateTime = (value: string) => value ? value.replace('T', ' ') : '-';
+const formatUsageArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ') || '-';
+
 export default function EquipmentPage() {
   const { currentRole, currentPersonnelId, currentUserName } = useAppContext();
   const {
     equipment, personnel, teamAssignments, engineerAssignments,
     addEquipment: dbAddEquipment, updateEquipment: dbUpdateEquipment, deleteEquipment: dbDeleteEquipment,
     updateTeamAssignment, equipmentRequests, addEquipmentRequest, updateEquipmentRequest, deleteEquipmentRequest,
-    addEquipmentToTeam,
+    addEquipmentToTeam, dailyLogs,
   } = useDataContext();
 
   const isEquipmentManager = currentRole === 'equipment_admin';
@@ -340,6 +343,34 @@ export default function EquipmentPage() {
     [equipmentRequests]
   );
 
+  const visibleEquipmentUsageLogs = useMemo(() => {
+    const visibleForemanIds = new Set<string>();
+    if (currentRole === 'foreman') {
+      visibleForemanIds.add(currentPersonnelId);
+    } else if (currentRole === 'engineer') {
+      const assignment = engineerAssignments.find(a => a.engineerId === currentPersonnelId);
+      assignment?.foremanIds.forEach(id => visibleForemanIds.add(id));
+    }
+
+    return dailyLogs
+      .filter(log => !log.deletedAt)
+      .filter(log => currentRole === 'equipment_admin' || visibleForemanIds.has(log.foremanId))
+      .flatMap(log => log.equipmentUsage.map(entry => {
+        const eq = equipment.find(item => item.id === entry.equipmentId);
+        return {
+          logId: log.id,
+          entry,
+          date: log.date,
+          foremanName: log.foremanName,
+          foremanLabel: personnel.find(p => p.id === log.foremanId)?.laborId || log.foremanName,
+          equipmentNo: eq?.equipmentNo,
+          equipmentModel: eq?.model,
+          status: log.status,
+        };
+      }))
+      .sort((a, b) => `${b.date} ${b.entry.startTime}`.localeCompare(`${a.date} ${a.entry.startTime}`));
+  }, [currentRole, currentPersonnelId, dailyLogs, engineerAssignments, equipment, personnel]);
+
   const requestStatusBadge = (status: string) => {
     switch (status) {
       case 'engineer_pending': return <Badge variant="outline" className="text-orange-600 border-orange-600"><Clock size={12} className="mr-1" />待工程师审批 Engineer Review</Badge>;
@@ -395,6 +426,53 @@ export default function EquipmentPage() {
       </div>
     );
   };
+
+  const renderEquipmentUsageLogs = () => (
+    <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
+      <table className="w-full min-w-[920px] text-sm">
+        <thead>
+          <tr className="border-b bg-muted/50">
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">日期 Date</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">设备 Equipment</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">工长 Foreman</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">时间 Time</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">时长 Hours</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">区域 Area</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">施工代码 Work Code</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">说明 Description</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {visibleEquipmentUsageLogs.map(({ logId, entry, date, foremanName, foremanLabel, equipmentNo, equipmentModel, status }) => (
+            <tr key={`${logId}-${entry.id}`} className="hover:bg-muted/30">
+              <td className="px-4 py-3 font-mono text-xs">{date}</td>
+              <td className="px-4 py-3">
+                <div className="font-medium">{entry.equipmentName}</div>
+                <div className="text-xs text-muted-foreground">{[equipmentNo, equipmentModel].filter(Boolean).join(' / ') || '-'}</div>
+              </td>
+              <td className="px-4 py-3">
+                <div>{foremanName}</div>
+                <div className="font-mono text-xs text-muted-foreground">{foremanLabel}</div>
+              </td>
+              <td className="px-4 py-3 text-xs text-muted-foreground">
+                {formatLogDateTime(entry.startTime)} - {formatLogDateTime(entry.endTime)}
+              </td>
+              <td className="px-4 py-3 font-medium">{entry.hours}h</td>
+              <td className="px-4 py-3 text-muted-foreground">{formatUsageArea(entry)}</td>
+              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{entry.workCodeName || '-'}</td>
+              <td className="px-4 py-3 text-muted-foreground">
+                <div className="max-w-[220px] truncate" title={entry.detail || ''}>{entry.detail || '-'}</div>
+                <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground/70">{status}</div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {visibleEquipmentUsageLogs.length === 0 && (
+        <div className="px-4 py-12 text-center text-muted-foreground">暂无设备使用日志 No equipment usage logs</div>
+      )}
+    </div>
+  );
 
   // ── Shared request dialog ──
   const renderRequestDialog = () => (
@@ -675,6 +753,7 @@ export default function EquipmentPage() {
         <Tabs defaultValue="list" className="mb-6">
           <TabsList className="w-full sm:w-auto">
             <TabsTrigger value="list">设备列表 Equipment List</TabsTrigger>
+            <TabsTrigger value="usage">设备使用日志 Usage Logs ({visibleEquipmentUsageLogs.length})</TabsTrigger>
             <TabsTrigger value="requests" className="relative">
               设备申请 Requests
               {adminPendingRequests.length > 0 && (
@@ -688,6 +767,9 @@ export default function EquipmentPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {equipment.map(renderEquipmentCard)}
             </div>
+          </TabsContent>
+          <TabsContent value="usage">
+            {renderEquipmentUsageLogs()}
           </TabsContent>
           <TabsContent value="requests">
             {equipmentRequests.length === 0 ? (
@@ -761,6 +843,7 @@ export default function EquipmentPage() {
         <Tabs defaultValue="list" className="mb-6">
           <TabsList className="w-full sm:w-auto">
             <TabsTrigger value="list">设备列表 Equipment List</TabsTrigger>
+            <TabsTrigger value="usage">设备使用日志 Usage Logs ({visibleEquipmentUsageLogs.length})</TabsTrigger>
             <TabsTrigger value="review" className="relative">
               工长申请审批 Foreman Requests
               {engineerPendingRequests.length > 0 && (
@@ -775,6 +858,9 @@ export default function EquipmentPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {equipment.map(renderEquipmentCard)}
             </div>
+          </TabsContent>
+          <TabsContent value="usage">
+            {renderEquipmentUsageLogs()}
           </TabsContent>
           <TabsContent value="review">
             {engineerAllRequests.length === 0 ? (
@@ -818,12 +904,16 @@ export default function EquipmentPage() {
       <Tabs defaultValue="list" className="mb-6">
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="list">设备列表 Equipment List</TabsTrigger>
+          <TabsTrigger value="usage">设备使用日志 Usage Logs ({visibleEquipmentUsageLogs.length})</TabsTrigger>
           <TabsTrigger value="myRequests">我的申请 My Requests ({myRequests.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="list">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {equipment.map(renderEquipmentCard)}
           </div>
+        </TabsContent>
+        <TabsContent value="usage">
+          {renderEquipmentUsageLogs()}
         </TabsContent>
         <TabsContent value="myRequests">
           {myRequests.length === 0 ? (

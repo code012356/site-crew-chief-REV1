@@ -11,6 +11,11 @@ import RevisionHistoryDialog from '@/components/RevisionHistoryDialog';
 
 const formatDT = (dt: string) => dt ? dt.replace('T', ' ') : '-';
 const formatArea = (entry: { area: string; areaDetail?: string }) => [entry.area, entry.areaDetail].filter(Boolean).join(' / ');
+const getWorkerHours = (log: DailyLog) => log.entries.reduce((sum, entry) => sum + entry.hours, 0);
+const getEquipmentHours = (log: DailyLog) => log.equipmentUsage.reduce((sum, entry) => sum + entry.hours, 0);
+const getLogSummary = (log: DailyLog) => (
+  `${log.entries.length} 条工人记录 Worker Entries · ${log.equipmentUsage.length} 条设备记录 Eq. Entries · 工人工时 Worker ${getWorkerHours(log)}h · 设备用时 Eq. ${getEquipmentHours(log)}h`
+);
 
 export default function ReviewPage() {
   const { currentPersonnelId } = useAppContext();
@@ -58,7 +63,7 @@ export default function ReviewPage() {
       timestamp: new Date().toISOString(),
       entries: log?.entries || [],
       equipmentUsage: log?.equipmentUsage || [],
-      reviewComment: '[鎾ゅ洖宸叉壒鍑?Withdraw Approved]',
+      reviewComment: '[撤回已批准 Withdraw Approved]',
     };
     await updateDailyLog(id, {
       status: 'withdrawn' as any,
@@ -78,7 +83,7 @@ export default function ReviewPage() {
       timestamp: new Date().toISOString(),
       entries: log?.entries || [],
       equipmentUsage: log?.equipmentUsage || [],
-      reviewComment: '[鎾ゅ洖琚嫆缁?Withdraw Rejected]',
+      reviewComment: '[撤回已拒绝 Withdraw Rejected]',
     };
     await updateDailyLog(id, {
       status: prevStatus as any,
@@ -187,7 +192,7 @@ export default function ReviewPage() {
   const renderHistoryButton = (log: DailyLog) => (
     (log.revisions?.length || 0) > 0 && (
       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setHistoryLogId(log.id); }} className="gap-1 text-xs h-7">
-        <History size={12} /> 淇敼鍘嗗彶 History
+        <History size={12} /> 修改历史 History
       </Button>
     )
   );
@@ -203,7 +208,7 @@ export default function ReviewPage() {
       {withdrawRequests.length > 0 && (
         <>
           <h2 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <Undo2 size={14} /> 鎾ゅ洖鐢宠 Withdraw Requests ({withdrawRequests.length})
+            <Undo2 size={14} /> 撤回申请 Withdraw Requests ({withdrawRequests.length})
           </h2>
           <div className="space-y-4 mb-8">
             {withdrawRequests.map(log => (
@@ -211,7 +216,7 @@ export default function ReviewPage() {
                 <div className="px-5 py-4 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(log.id)}>
                   <div>
                     <p className="font-medium"><span className="font-mono text-sm">{getForemanLabel(log)}</span> - {log.date}</p>
-                    <p className="text-sm text-muted-foreground">{log.entries.length} 鏉″伐浜鸿褰?Worker Entries 路 {log.equipmentUsage.length} 鏉¤澶囪褰?Eq. Entries 路 鎬诲伐鏃?Total {log.entries.reduce((s, e) => s + e.hours, 0)}h</p>
+                    <p className="text-sm text-muted-foreground">{getLogSummary(log)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="status-badge status-pending">{logStatusLabels.withdraw_requested}</span>
@@ -241,7 +246,7 @@ export default function ReviewPage() {
       )}
 
       {/* Pending */}
-      <h2 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">寰呭鏍?Pending ({pending.length})</h2>
+      <h2 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">待审核 Pending ({pending.length})</h2>
       <div className="space-y-4 mb-8">
         {pending.length === 0 && <p className="text-muted-foreground text-sm py-8 text-center">{messages.noPending}</p>}
         {pending.map(log => (
@@ -249,7 +254,7 @@ export default function ReviewPage() {
             <div className="px-5 py-4 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(log.id)}>
               <div>
                 <p className="font-medium"><span className="font-mono text-sm">{getForemanLabel(log)}</span> - {log.date}</p>
-                <p className="text-sm text-muted-foreground">{log.entries.length} 鏉″伐浜鸿褰?Worker Entries 路 {log.equipmentUsage.length} 鏉¤澶囪褰?Eq. Entries 路 鎬诲伐鏃?Total {log.entries.reduce((s, e) => s + e.hours, 0)}h</p>
+                <p className="text-sm text-muted-foreground">{getLogSummary(log)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="status-badge status-pending">{logStatusLabels.pending}</span>
@@ -284,14 +289,14 @@ export default function ReviewPage() {
       </div>
 
       {/* Reviewed */}
-      <h2 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">宸插鏍?Reviewed ({reviewed.length})</h2>
+      <h2 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">已审核 Reviewed ({reviewed.length})</h2>
       <div className="space-y-3">
         {reviewed.map(log => (
           <div key={log.id} className="bg-card rounded-lg border shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(log.id)}>
               <div>
                 <p className="text-sm font-medium"><span className="font-mono text-sm">{getForemanLabel(log)}</span> - {log.date}</p>
-                <p className="text-xs text-muted-foreground">{log.entries.length} 鏉¤褰?entries 路 {log.entries.reduce((s, e) => s + e.hours, 0)}h</p>
+                <p className="text-xs text-muted-foreground">{getLogSummary(log)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`status-badge ${statusClass(log.status)}`}>

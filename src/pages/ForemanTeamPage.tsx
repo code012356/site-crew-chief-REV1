@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { useDataContext } from '@/contexts/DataContext';
 import { Personnel, Equipment, PersonnelStatus, EquipmentStatus } from '@/lib/types';
@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { personnelStatusLabels, equipmentStatusLabels, pageTitles, fieldLabels, actionLabels, messages } from '@/lib/i18n';
+
+const PAGE_SIZE = 5;
 
 const statusIcons: Record<PersonnelStatus, React.ReactNode> = {
   active: <UserCheck size={14} className="text-emerald-600" />,
@@ -38,6 +40,21 @@ export default function ForemanTeamPage() {
   const teamEquip = getTeamEquipment(foremanId);
   const availableWorkers = getAvailableWorkers(foremanId);
   const availableEquipment = getAvailableEquipment(foremanId);
+
+  const [workerPage, setWorkerPage] = useState(1);
+  const [equipmentPage, setEquipmentPage] = useState(1);
+  const workerTotalPages = Math.max(1, Math.ceil(teamWorkers.length / PAGE_SIZE));
+  const equipmentTotalPages = Math.max(1, Math.ceil(teamEquip.length / PAGE_SIZE));
+  const safeWorkerPage = Math.min(workerPage, workerTotalPages);
+  const safeEquipmentPage = Math.min(equipmentPage, equipmentTotalPages);
+  const pagedWorkers = useMemo(
+    () => teamWorkers.slice((safeWorkerPage - 1) * PAGE_SIZE, safeWorkerPage * PAGE_SIZE),
+    [teamWorkers, safeWorkerPage]
+  );
+  const pagedEquipment = useMemo(
+    () => teamEquip.slice((safeEquipmentPage - 1) * PAGE_SIZE, safeEquipmentPage * PAGE_SIZE),
+    [teamEquip, safeEquipmentPage]
+  );
 
   const [addWorkerOpen, setAddWorkerOpen] = useState(false);
   const [addEquipOpen, setAddEquipOpen] = useState(false);
@@ -111,6 +128,26 @@ export default function ForemanTeamPage() {
     toast.success('设备已移出班组 Equipment removed from team');
   };
 
+  const renderPager = (page: number, totalPages: number, setPage: (page: number) => void, total: number) => {
+    if (total <= PAGE_SIZE) return null;
+    const start = (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(page * PAGE_SIZE, total);
+    return (
+      <div className="flex flex-col gap-2 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <span>显示 {start}-{end} / {total} Showing {start}-{end} of {total}</span>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>
+            上一页 Prev
+          </Button>
+          <span className="min-w-16 text-center">第 {page} / {totalPages} 页</span>
+          <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>
+            下一页 Next
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -142,7 +179,7 @@ export default function ForemanTeamPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {teamWorkers.map(w => (
+              {pagedWorkers.map(w => (
                 <tr key={w.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-mono text-sm font-semibold">{w.laborId || '-'}</td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{w.name}</td>
@@ -174,6 +211,7 @@ export default function ForemanTeamPage() {
               ))}
             </tbody>
           </table>
+          {renderPager(safeWorkerPage, workerTotalPages, setWorkerPage, teamWorkers.length)}
           {teamWorkers.length === 0 && (
             <div className="px-4 py-12 text-center text-muted-foreground">
               {messages.noWorkers}，工人分配由管理员管理 Worker assignment managed by admin
@@ -194,7 +232,7 @@ export default function ForemanTeamPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teamEquip.map(eq => (
+          {pagedEquipment.map(eq => (
             <div key={eq.id} className="bg-card rounded-lg border shadow-sm p-4">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold text-sm">{eq.name}</h3>
@@ -218,6 +256,7 @@ export default function ForemanTeamPage() {
             </div>
           ))}
         </div>
+        {renderPager(safeEquipmentPage, equipmentTotalPages, setEquipmentPage, teamEquip.length)}
         {teamEquip.length === 0 && (
           <div className="bg-card rounded-lg border shadow-sm px-4 py-12 text-center text-muted-foreground">
             {messages.noEquipment}，设备分配由管理员管理 Equipment assignment managed by admin
