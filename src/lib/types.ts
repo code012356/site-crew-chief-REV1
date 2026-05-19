@@ -119,6 +119,11 @@ export interface EquipmentRequest {
   requestType: EquipmentRequestType;
   equipmentId?: string;
   equipmentName: string;
+  quantity?: number;
+  requiredDate?: string;
+  requestArea?: string;
+  suggestedModel?: string;
+  priority?: 'normal' | 'urgent';
   reason: string;
   status: EquipmentRequestStatus;
   adminComment?: string;

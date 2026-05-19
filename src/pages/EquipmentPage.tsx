@@ -75,7 +75,19 @@ export default function EquipmentPage() {
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
   const [requestType, setRequestType] = useState<EquipmentRequestType>('existing');
-  const [requestForm, setRequestForm] = useState({ equipmentId: '', equipmentName: '', reason: '' });
+  const [requestForm, setRequestForm] = useState({
+    equipmentId: '',
+    equipmentName: '',
+    quantity: 1,
+    requiredDate: new Date().toISOString().slice(0, 10),
+    requestArea: '',
+    suggestedModel: '',
+    priority: 'normal' as 'normal' | 'urgent',
+    reason: '',
+  });
+  const [equipmentSearch, setEquipmentSearch] = useState('');
+  const [equipmentStatusFilter, setEquipmentStatusFilter] = useState<'all' | EquipmentStatus>('all');
+  const [equipmentTeamFilter, setEquipmentTeamFilter] = useState('all');
 
   // ── Admin/Engineer approve dialog state ──
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
@@ -206,15 +218,21 @@ export default function EquipmentPage() {
   };
 
   // ── Request handlers (foreman/engineer) ──
-  const openRequestDialog = (eq?: Equipment) => {
+  const defaultRequestForm = (eq?: Equipment) => ({
+    equipmentId: eq?.id || '',
+    equipmentName: eq?.name || '',
+    quantity: 1,
+    requiredDate: new Date().toISOString().slice(0, 10),
+    requestArea: eq?.location || '',
+    suggestedModel: '',
+    priority: 'normal' as 'normal' | 'urgent',
+    reason: '',
+  });
+
+  const openRequestDialog = (eq?: Equipment, type: EquipmentRequestType = eq ? 'existing' : 'existing') => {
     setEditingRequestId(null);
-    if (eq) {
-      setRequestType('existing');
-      setRequestForm({ equipmentId: eq.id, equipmentName: eq.name, reason: '' });
-    } else {
-      setRequestType('existing');
-      setRequestForm({ equipmentId: '', equipmentName: '', reason: '' });
-    }
+    setRequestType(type);
+    setRequestForm(defaultRequestForm(type === 'existing' ? eq : undefined));
     setRequestDialogOpen(true);
   };
 
@@ -224,6 +242,11 @@ export default function EquipmentPage() {
     setRequestForm({
       equipmentId: req.equipmentId || '',
       equipmentName: req.equipmentName,
+      quantity: req.quantity || 1,
+      requiredDate: req.requiredDate || new Date().toISOString().slice(0, 10),
+      requestArea: req.requestArea || '',
+      suggestedModel: req.suggestedModel || '',
+      priority: req.priority || 'normal',
       reason: req.reason,
     });
     setRequestDialogOpen(true);
@@ -234,6 +257,9 @@ export default function EquipmentPage() {
       toast.error(messages.fillComplete); return;
     }
     if (requestType === 'new' && !requestForm.equipmentName.trim()) {
+      toast.error(messages.fillComplete); return;
+    }
+    if (requestType === 'new' && (!requestForm.quantity || requestForm.quantity < 1 || !requestForm.requiredDate || !requestForm.requestArea.trim())) {
       toast.error(messages.fillComplete); return;
     }
     if (!requestForm.reason.trim()) {
@@ -266,6 +292,11 @@ export default function EquipmentPage() {
         requestType,
         equipmentId: requestType === 'existing' ? requestForm.equipmentId : undefined,
         equipmentName: eqName,
+        quantity: requestType === 'new' ? requestForm.quantity : undefined,
+        requiredDate: requestType === 'new' ? requestForm.requiredDate : undefined,
+        requestArea: requestType === 'new' ? requestForm.requestArea : undefined,
+        suggestedModel: requestType === 'new' ? requestForm.suggestedModel || undefined : undefined,
+        priority: requestType === 'new' ? requestForm.priority : undefined,
         reason: requestForm.reason,
         status: resubmitStatus as any,
         engineerComment: undefined,
@@ -280,6 +311,11 @@ export default function EquipmentPage() {
         requestType,
         equipmentId: requestType === 'existing' ? requestForm.equipmentId : undefined,
         equipmentName: eqName,
+        quantity: requestType === 'new' ? requestForm.quantity : undefined,
+        requiredDate: requestType === 'new' ? requestForm.requiredDate : undefined,
+        requestArea: requestType === 'new' ? requestForm.requestArea : undefined,
+        suggestedModel: requestType === 'new' ? requestForm.suggestedModel || undefined : undefined,
+        priority: requestType === 'new' ? requestForm.priority : undefined,
         reason: requestForm.reason,
         status: initialStatus as any,
       });
@@ -329,7 +365,7 @@ export default function EquipmentPage() {
     setAssignForeman('');
     setAssignEquipmentId(req?.equipmentId || '');
     setAdminComment('');
-    setNewEqForm({ name: req?.equipmentName || '', equipmentNo: '', model: '', location: '' });
+    setNewEqForm({ name: req?.equipmentName || '', equipmentNo: '', model: req?.suggestedModel || '', location: req?.requestArea || '' });
     setApproveDialogOpen(true);
   };
 
@@ -411,6 +447,22 @@ export default function EquipmentPage() {
     equipmentRequests.filter(r => r.status === 'pending'),
     [equipmentRequests]
   );
+
+  const filteredEquipment = useMemo(() => {
+    const q = equipmentSearch.trim().toLowerCase();
+    return equipment.filter(eq => {
+      if (equipmentStatusFilter !== 'all' && eq.status !== equipmentStatusFilter) return false;
+      const foremanIds = getAssignedForemanIds(eq.id);
+      if (equipmentTeamFilter !== 'all') {
+        if (equipmentTeamFilter === 'unassigned' && foremanIds.length > 0) return false;
+        if (equipmentTeamFilter !== 'unassigned' && !foremanIds.includes(equipmentTeamFilter)) return false;
+      }
+      if (!q) return true;
+      const teams = getAssignedForemanNames(eq.id).join(' ');
+      const haystack = `${eq.equipmentNo || ''} ${eq.name} ${eq.model || ''} ${eq.location || ''} ${teams}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [equipment, equipmentSearch, equipmentStatusFilter, equipmentTeamFilter, teamAssignments, personnel]);
 
   const visibleEquipmentUsageLogs = useMemo(() => {
     const visibleForemanIds = new Set<string>();
@@ -499,6 +551,139 @@ export default function EquipmentPage() {
     );
   };
 
+  const renderEquipmentLedger = () => (
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-card p-3 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_180px_220px_auto] md:items-end">
+          <div>
+            <Label>搜索 Search</Label>
+            <Input
+              value={equipmentSearch}
+              onChange={e => setEquipmentSearch(e.target.value)}
+              placeholder="编号 / 名称 / 型号 / 位置 / 班组"
+            />
+          </div>
+          <div>
+            <Label>状态 Status</Label>
+            <Select value={equipmentStatusFilter} onValueChange={value => setEquipmentStatusFilter(value as 'all' | EquipmentStatus)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部 All</SelectItem>
+                <SelectItem value="available">{equipmentStatusLabels.available}</SelectItem>
+                <SelectItem value="in_use">{equipmentStatusLabels.in_use}</SelectItem>
+                <SelectItem value="maintenance">{equipmentStatusLabels.maintenance}</SelectItem>
+                <SelectItem value="retired">{equipmentStatusLabels.retired}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>分配班组 Assigned Team</Label>
+            <Select value={equipmentTeamFilter} onValueChange={setEquipmentTeamFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部 All</SelectItem>
+                <SelectItem value="unassigned">{fieldLabels.unassigned}</SelectItem>
+                {foremen.map(fm => <SelectItem key={fm.id} value={fm.id}>{fm.laborId ? `${fm.laborId} / ` : ''}{fm.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="outline" onClick={() => { setEquipmentSearch(''); setEquipmentStatusFilter('all'); setEquipmentTeamFilter('all'); }}>
+            重置 Reset
+          </Button>
+        </div>
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border bg-card shadow-sm md:block">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead>
+            <tr className="border-b bg-primary text-primary-foreground">
+              <th className="px-4 py-3 text-left font-medium">设备编号 Equipment No.</th>
+              <th className="px-4 py-3 text-left font-medium">设备名称 Equipment Name</th>
+              <th className="px-4 py-3 text-left font-medium">型号 Model</th>
+              <th className="px-4 py-3 text-left font-medium">位置 Location</th>
+              <th className="px-4 py-3 text-left font-medium">状态 Status</th>
+              <th className="px-4 py-3 text-left font-medium">分配班组 Assigned Team</th>
+              <th className="px-4 py-3 text-left font-medium">操作 Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {filteredEquipment.map(eq => {
+              const teams = getAssignedForemanNames(eq.id);
+              const canRequest = eq.status === 'available' && !myEquipmentIds.has(eq.id);
+              return (
+                <tr key={eq.id} className="hover:bg-muted/40">
+                  <td className="px-4 py-3 font-mono">{eq.equipmentNo || '-'}</td>
+                  <td className="px-4 py-3 font-medium">{eq.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{eq.model || '-'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{eq.location || fieldLabels.unassigned}</td>
+                  <td className="px-4 py-3"><span className={`status-badge ${eq.status === 'available' ? 'status-approved' : eq.status === 'in_use' ? 'status-pending' : eq.status === 'maintenance' ? 'status-leave' : 'status-resigned'}`}>{equipmentStatusLabels[eq.status]}</span></td>
+                  <td className="px-4 py-3 text-muted-foreground">{teams.length ? teams.join(' / ') : fieldLabels.unassigned}</td>
+                  <td className="px-4 py-3">
+                    {isEquipmentManager ? (
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openEdit(eq)} className="gap-1"><Edit2 size={13} /> {actionLabels.edit}</Button>
+                        <Button variant="outline" size="sm" onClick={async () => {
+                          await dbDeleteEquipment(eq.id);
+                          toast.success(messages.deleted);
+                        }} className="gap-1 text-destructive hover:text-destructive"><Trash2 size={13} /> {actionLabels.delete}</Button>
+                      </div>
+                    ) : canRequest ? (
+                      <Button variant="outline" size="sm" onClick={() => openRequestDialog(eq, 'existing')} className="gap-1">
+                        <Send size={13} /> 申请使用 Request
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">不可申请</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filteredEquipment.length === 0 && <div className="px-4 py-10 text-center text-muted-foreground">{messages.noMatch}</div>}
+      </div>
+
+      <div className="space-y-3 md:hidden">
+        {filteredEquipment.map(eq => {
+          const teams = getAssignedForemanNames(eq.id);
+          const canRequest = eq.status === 'available' && !myEquipmentIds.has(eq.id);
+          return (
+            <div key={eq.id} className="rounded-lg border bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-mono text-sm text-muted-foreground">{eq.equipmentNo || '-'}</div>
+                  <div className="font-semibold">{eq.name}</div>
+                </div>
+                <span className={`status-badge ${eq.status === 'available' ? 'status-approved' : eq.status === 'in_use' ? 'status-pending' : eq.status === 'maintenance' ? 'status-leave' : 'status-resigned'}`}>{equipmentStatusLabels[eq.status]}</span>
+              </div>
+              <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                <p>Model: {eq.model || '-'}</p>
+                <p>Location: {eq.location || fieldLabels.unassigned}</p>
+                <p>Team: {teams.length ? teams.join(' / ') : fieldLabels.unassigned}</p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isEquipmentManager ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => openEdit(eq)} className="gap-1"><Edit2 size={13} /> {actionLabels.edit}</Button>
+                    <Button variant="outline" size="sm" onClick={async () => {
+                      await dbDeleteEquipment(eq.id);
+                      toast.success(messages.deleted);
+                    }} className="gap-1 text-destructive hover:text-destructive"><Trash2 size={13} /> {actionLabels.delete}</Button>
+                  </>
+                ) : canRequest ? (
+                  <Button variant="outline" size="sm" onClick={() => openRequestDialog(eq, 'existing')} className="gap-1">
+                    <Send size={13} /> 申请使用 Request
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+        {filteredEquipment.length === 0 && <div className="rounded-lg border bg-card px-4 py-10 text-center text-muted-foreground">{messages.noMatch}</div>}
+      </div>
+    </div>
+  );
+
   const renderEquipmentUsageLogs = () => (
     <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
       <table className="w-full min-w-[920px] text-sm">
@@ -555,12 +740,12 @@ export default function EquipmentPage() {
   // ── Shared request dialog ──
   const renderRequestDialog = () => (
     <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{editingRequestId ? '修改申请 Edit Request' : '申请设备 Request Equipment'}</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>{editingRequestId ? '修改申请 Edit Request' : (requestType === 'new' ? '新增设备申请 Request New Equipment' : '申请设备 Request Equipment')}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div>
             <Label className="mb-3 block">申请类型 Request Type</Label>
-            <RadioGroup value={requestType} onValueChange={v => { setRequestType(v as EquipmentRequestType); setRequestForm(f => ({ ...f, equipmentId: '', equipmentName: '' })); }} className="flex gap-4">
+            <RadioGroup value={requestType} onValueChange={v => { setRequestType(v as EquipmentRequestType); setRequestForm(defaultRequestForm()); }} className="flex gap-4">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="existing" id="req-existing" />
                 <Label htmlFor="req-existing" className="cursor-pointer">已有设备 Existing Equipment</Label>
@@ -590,15 +775,45 @@ export default function EquipmentPage() {
               </Select>
             </div>
           ) : (
-            <div>
-              <Label>设备名称/描述 Equipment Name/Description</Label>
-              <Input value={requestForm.equipmentName} onChange={e => setRequestForm(f => ({ ...f, equipmentName: e.target.value }))} placeholder="例如：挖掘机 CAT320 e.g. Excavator CAT320" />
+            <div className="space-y-3">
+              <div>
+                <Label>设备名称 Equipment Name *</Label>
+                <Input value={requestForm.equipmentName} onChange={e => setRequestForm(f => ({ ...f, equipmentName: e.target.value }))} placeholder="例如 3 Ton Pick Up / Air compressor" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>需求数量 Quantity *</Label>
+                  <Input type="number" min={1} value={requestForm.quantity} onChange={e => setRequestForm(f => ({ ...f, quantity: Math.max(1, Number(e.target.value) || 1) }))} />
+                </div>
+                <div>
+                  <Label>期望日期 Required Date *</Label>
+                  <Input type="date" value={requestForm.requiredDate} onChange={e => setRequestForm(f => ({ ...f, requiredDate: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label>使用区域 Area *</Label>
+                {renderLocationSelect(requestForm.requestArea, requestArea => setRequestForm(f => ({ ...f, requestArea })))}
+              </div>
+              <div>
+                <Label>建议型号 Suggested Model</Label>
+                <Input value={requestForm.suggestedModel} onChange={e => setRequestForm(f => ({ ...f, suggestedModel: e.target.value }))} placeholder="可选，例如 3Ton / 2026" />
+              </div>
+              <div>
+                <Label>紧急程度 Priority</Label>
+                <Select value={requestForm.priority} onValueChange={priority => setRequestForm(f => ({ ...f, priority: priority as 'normal' | 'urgent' }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">普通 Normal</SelectItem>
+                    <SelectItem value="urgent">紧急 Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
           <div>
-            <Label>申请原因 Reason</Label>
-            <Textarea value={requestForm.reason} onChange={e => setRequestForm(f => ({ ...f, reason: e.target.value }))} placeholder="请说明申请原因及用途 Please describe the reason and usage..." />
+            <Label>{requestType === 'new' ? '用途说明 Purpose *' : '申请原因 Reason *'}</Label>
+            <Textarea value={requestForm.reason} onChange={e => setRequestForm(f => ({ ...f, reason: e.target.value }))} placeholder="请说明申请原因和使用用途 Please describe the reason and usage..." />
           </div>
 
           {/* Show flow info for foreman */}
@@ -638,6 +853,14 @@ export default function EquipmentPage() {
               </div>
               <p className="text-sm text-muted-foreground">申请人：{selectedRequest.requesterName}（工长）</p>
               <p className="text-sm text-muted-foreground">原因：{selectedRequest.reason}</p>
+              {selectedRequest.requestType === 'new' && (
+                <p className="text-sm text-muted-foreground">
+                  新增需求：Qty {selectedRequest.quantity || 1}
+                  {selectedRequest.requiredDate ? ` / ${selectedRequest.requiredDate}` : ''}
+                  {selectedRequest.requestArea ? ` / ${selectedRequest.requestArea}` : ''}
+                  {selectedRequest.suggestedModel ? ` / ${selectedRequest.suggestedModel}` : ''}
+                </p>
+              )}
             </div>
             <div>
               <Label>工程师意见 Engineer Comment</Label>
@@ -675,6 +898,14 @@ export default function EquipmentPage() {
               </div>
               <p className="text-sm text-muted-foreground">申请人：{selectedRequest.requesterName}（{selectedRequest.requesterRole === 'foreman' ? '工长' : '工程师'}）</p>
               <p className="text-sm text-muted-foreground">原因：{selectedRequest.reason}</p>
+              {selectedRequest.requestType === 'new' && (
+                <p className="text-sm text-muted-foreground">
+                  需求：Qty {selectedRequest.quantity || 1}
+                  {selectedRequest.requiredDate ? ` / ${selectedRequest.requiredDate}` : ''}
+                  {selectedRequest.requestArea ? ` / ${selectedRequest.requestArea}` : ''}
+                  {selectedRequest.priority === 'urgent' ? ' / Urgent' : ''}
+                </p>
+              )}
               {selectedRequest.engineerComment && (
                 <p className="text-sm text-blue-600">工程师意见：{selectedRequest.engineerComment}</p>
               )}
@@ -690,6 +921,18 @@ export default function EquipmentPage() {
                   <Label>{fieldLabels.location}</Label>
                   {renderLocationSelect(newEqForm.location, location => setNewEqForm(f => ({ ...f, location })))}
                 </div>
+                {selectedRequest.requesterRole === 'engineer' && (
+                  <div>
+                    <Label>分配给工长 Assign to Foreman</Label>
+                    <Select value={assignForeman} onValueChange={setAssignForeman}>
+                      <SelectTrigger><SelectValue placeholder={fieldLabels.unassigned} /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{fieldLabels.unassigned}</SelectItem>
+                        {foremen.map(fm => <SelectItem key={fm.id} value={fm.id}>{fm.laborId ? `${fm.laborId} / ` : ''}{fm.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             ) : selectedRequest.requesterRole === 'foreman' ? (
               <div className="rounded-md border p-3 bg-primary/5 text-sm">
@@ -749,6 +992,15 @@ export default function EquipmentPage() {
         </div>
         {context !== 'own' && <p className="text-sm text-muted-foreground">申请人 Requester：{req.requesterName}（{req.requesterRole === 'foreman' ? '工长' : '工程师'}）</p>}
         <p className="text-sm text-muted-foreground">原因 Reason：{req.reason}</p>
+        {req.requestType === 'new' && (
+          <p className="text-sm text-muted-foreground">
+            新增需求 New request：Qty {req.quantity || 1}
+            {req.requiredDate ? ` / ${req.requiredDate}` : ''}
+            {req.requestArea ? ` / ${req.requestArea}` : ''}
+            {req.suggestedModel ? ` / ${req.suggestedModel}` : ''}
+            {req.priority === 'urgent' ? ' / Urgent' : ''}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">{new Date(req.createdAt).toLocaleString()}</p>
         {req.engineerComment && <p className="text-sm mt-1 text-blue-600">工程师意见 Engineer：{req.engineerComment}</p>}
         {req.adminComment && <p className="text-sm mt-1">管理回复 Admin：{req.adminComment}</p>}
@@ -845,9 +1097,7 @@ export default function EquipmentPage() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="list">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {equipment.map(renderEquipmentCard)}
-            </div>
+            {renderEquipmentLedger()}
           </TabsContent>
           <TabsContent value="usage">
             {renderEquipmentUsageLogs()}
@@ -940,9 +1190,14 @@ export default function EquipmentPage() {
             <h1 className="page-title">{pageTitles.equipment.title}</h1>
             <p className="page-subtitle">查看设备情况，审批工长申请，提交自己的申请 View equipment, review foreman requests, submit own requests</p>
           </div>
-          <Button size="sm" onClick={() => openRequestDialog()} className="w-full gap-2 sm:w-auto">
-            <Send size={16} /> {actionLabels.requestEquipment}
-          </Button>
+          <div className="mobile-action-grid sm:flex sm:w-auto">
+            <Button variant="outline" size="sm" onClick={() => openRequestDialog(undefined, 'new')} className="gap-2">
+              <PackagePlus size={16} /> 申请新增设备 Request New
+            </Button>
+            <Button size="sm" onClick={() => openRequestDialog(undefined, 'existing')} className="gap-2">
+              <Send size={16} /> 申请现有设备 Request Existing
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="list" className="mb-6">
@@ -960,9 +1215,7 @@ export default function EquipmentPage() {
             <TabsTrigger value="myRequests">我的申请 My Requests ({myRequests.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="list">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {equipment.map(renderEquipmentCard)}
-            </div>
+            {renderEquipmentLedger()}
           </TabsContent>
           <TabsContent value="usage">
             {renderEquipmentUsageLogs()}
@@ -1001,9 +1254,14 @@ export default function EquipmentPage() {
           <h1 className="page-title">{pageTitles.equipment.title}</h1>
           <p className="page-subtitle">查看设备情况并申请分配 View equipment and request allocation</p>
         </div>
-        <Button size="sm" onClick={() => openRequestDialog()} className="w-full gap-2 sm:w-auto">
-          <Send size={16} /> {actionLabels.requestEquipment}
-        </Button>
+        <div className="mobile-action-grid sm:flex sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => openRequestDialog(undefined, 'new')} className="gap-2">
+            <PackagePlus size={16} /> 申请新增设备 Request New
+          </Button>
+          <Button size="sm" onClick={() => openRequestDialog(undefined, 'existing')} className="gap-2">
+            <Send size={16} /> 申请现有设备 Request Existing
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="list" className="mb-6">
@@ -1013,9 +1271,7 @@ export default function EquipmentPage() {
           <TabsTrigger value="myRequests">我的申请 My Requests ({myRequests.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="list">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {equipment.map(renderEquipmentCard)}
-          </div>
+          {renderEquipmentLedger()}
         </TabsContent>
         <TabsContent value="usage">
           {renderEquipmentUsageLogs()}

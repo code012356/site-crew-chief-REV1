@@ -187,12 +187,17 @@ export type Database = {
           equipment_id: string | null
           equipment_name: string
           id: string
+          priority: string | null
+          quantity: number | null
           reason: string
+          request_area: string | null
           request_type: string
           requester_id: string
           requester_name: string
           requester_role: string
+          required_date: string | null
           resolved_at: string | null
+          suggested_model: string | null
           status: string
         }
         Insert: {
@@ -202,12 +207,17 @@ export type Database = {
           equipment_id?: string | null
           equipment_name: string
           id?: string
+          priority?: string | null
+          quantity?: number | null
           reason?: string
+          request_area?: string | null
           request_type?: string
           requester_id: string
           requester_name: string
           requester_role?: string
+          required_date?: string | null
           resolved_at?: string | null
+          suggested_model?: string | null
           status?: string
         }
         Update: {
@@ -217,12 +227,17 @@ export type Database = {
           equipment_id?: string | null
           equipment_name?: string
           id?: string
+          priority?: string | null
+          quantity?: number | null
           reason?: string
+          request_area?: string | null
           request_type?: string
           requester_id?: string
           requester_name?: string
           requester_role?: string
+          required_date?: string | null
           resolved_at?: string | null
+          suggested_model?: string | null
           status?: string
         }
         Relationships: []

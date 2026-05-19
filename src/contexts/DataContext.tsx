@@ -282,6 +282,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         requestType: r.request_type || 'existing',
         equipmentId: r.equipment_id || undefined,
         equipmentName: r.equipment_name,
+        quantity: r.quantity || undefined,
+        requiredDate: r.required_date || undefined,
+        requestArea: r.request_area || undefined,
+        suggestedModel: r.suggested_model || undefined,
+        priority: r.priority || undefined,
         reason: r.reason,
         status: r.status as EquipmentRequestStatus,
         adminComment: r.admin_comment || undefined,
@@ -704,6 +709,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       request_type: req.requestType,
       equipment_id: req.equipmentId || null,
       equipment_name: req.equipmentName,
+      quantity: req.quantity || null,
+      required_date: req.requiredDate || null,
+      request_area: req.requestArea || null,
+      suggested_model: req.suggestedModel || null,
+      priority: req.priority || null,
       reason: req.reason,
       status: req.status,
       admin_comment: req.adminComment || null,
@@ -721,6 +731,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (updates.requestType !== undefined) db.request_type = updates.requestType;
     if (updates.equipmentId !== undefined) db.equipment_id = updates.equipmentId || null;
     if (updates.equipmentName !== undefined) db.equipment_name = updates.equipmentName;
+    if (updates.quantity !== undefined) db.quantity = updates.quantity || null;
+    if (updates.requiredDate !== undefined) db.required_date = updates.requiredDate || null;
+    if (updates.requestArea !== undefined) db.request_area = updates.requestArea || null;
+    if (updates.suggestedModel !== undefined) db.suggested_model = updates.suggestedModel || null;
+    if (updates.priority !== undefined) db.priority = updates.priority || null;
     if (updates.reason !== undefined) db.reason = updates.reason;
     const { error } = await supabase.from('equipment_requests').update(db).eq('id', id);
     assertSupabaseOk(error, 'Update equipment request');
