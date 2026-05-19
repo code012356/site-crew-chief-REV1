@@ -28,3 +28,4 @@ supabase/.temp/
 *.sln
 *.sw?
 .vercel
+development log/
