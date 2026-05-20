@@ -347,7 +347,18 @@ export default function DailyLogPage() {
 
   const parseHours = (value: string) => {
     const parsed = Number(value.trim());
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  };
+
+  const hasMatrixHoursInput = (kind: 'worker' | 'equipment', resourceId: string, workItemId: string) => {
+    const value = matrixTimes[matrixKey(kind, resourceId, workItemId)]?.hours;
+    return value !== undefined && value.trim() !== '';
+  };
+
+  const isValidHoursInput = (value?: string) => {
+    if (value === undefined || value.trim() === '') return false;
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) && parsed >= 0;
   };
 
   const matrixHours: Record<string, string> = {};
@@ -458,8 +469,8 @@ export default function DailyLogPage() {
       const worker = teamWorkers.find(w => w.id === workerId);
       workItems.forEach(item => {
         const time = matrixTimes[matrixKey('worker', workerId, item.id)];
+        if (!time || !isValidHoursInput(time.hours)) return;
         const hours = getCellHours(time);
-        if (hours <= 0) return;
         workerRows.push({
           id: `e_${Date.now()}_${workerRows.length}`,
           workerId,
@@ -515,21 +526,33 @@ export default function DailyLogPage() {
           : `${resource.equipmentNo || resource.name}`;
 
         spans.forEach(span => {
-          if (span.time.hours?.trim() && span.hours <= 0) {
-            issues.push(`${label}: hours must be greater than 0`);
+          if (span.time.hours !== undefined && !isValidHoursInput(span.time.hours)) {
+            issues.push(`${label}: hours must be 0 or greater / 工时必须为 0 或以上`);
           }
           if (span.hours > 24) {
-            issues.push(`${label}: one task cannot exceed 24h`);
+            issues.push(`${label}: one task cannot exceed 24h / 单项任务不能超过 24 小时`);
           }
         });
 
         const total = spans.reduce((sum, span) => sum + span.hours, 0);
-        if (total > 24) issues.push(`${label}: total daily hours cannot exceed 24h`);
+        if (total > 24) issues.push(`${label}: total daily hours cannot exceed 24h / 当日总工时不能超过 24 小时`);
       });
     };
 
     collect('worker', selectedWorkers);
     collect('equipment', selectedEquipment);
+
+    for (let itemIndex = 0; itemIndex < workItems.length; itemIndex += 1) {
+      const item = workItems[itemIndex];
+      for (const worker of selectedWorkers) {
+        if (!hasMatrixHoursInput('worker', worker.id, item.id)) {
+          setActiveMatrixWorkItem(itemIndex);
+          const workerLabel = worker.laborId || worker.name;
+          toast.error(`请填写施工内容 ${itemIndex + 1} 中 ${workerLabel} 的工人工时，可填 0，不能为空。 / Please fill worker hours for work item ${itemIndex + 1}; 0 is allowed, blank is not allowed.`);
+          return false;
+        }
+      }
+    }
 
     if (issues.length > 0) {
       toast.error(issues[0]);
@@ -548,6 +571,10 @@ export default function DailyLogPage() {
     return { workerHours, equipmentHours, totalHours: workerHours + equipmentHours };
   };
 
+  const workItemWorkersComplete = (item: WorkItemDraft) => (
+    selectedWorkers.every(worker => hasMatrixHoursInput('worker', worker.id, item.id))
+  );
+
   const validateWizardStep = (step: WizardStep) => {
     if (step === 1) {
       if (workItems.some(item => !item.area || !item.areaDetail.trim() || !item.workCodeId || !item.detail.trim() || !item.quantity.trim())) {
@@ -563,13 +590,7 @@ export default function DailyLogPage() {
       if (!validateMatrixTimes()) return false;
       const { workerRows } = buildEntriesFromMatrix();
       if (workerRows.length === 0) {
-        toast.error('Please enter worker hours in the matrix');
-        return false;
-      }
-      const missingIndex = workItems.findIndex(item => getWorkItemAssignedHours(item).totalHours <= 0);
-      if (missingIndex >= 0) {
-        setActiveMatrixWorkItem(missingIndex);
-        toast.error(`Work item ${missingIndex + 1} has no hours. Please fill it before review.`);
+        toast.error('请填写工人工时矩阵，可填 0，不能为空。 / Please enter worker hours in the matrix; 0 is allowed, blank is not allowed.');
         return false;
       }
     }
@@ -1086,7 +1107,7 @@ export default function DailyLogPage() {
         value={time?.hours || ''}
         onChange={event => setMatrixCellHours(kind, resourceId, item.id, event.target.value)}
         placeholder="h"
-        className={cn('h-9 w-20 text-center', time?.hours?.trim() && hours <= 0 && 'border-destructive text-destructive')}
+        className={cn('h-9 w-20 text-center', time?.hours !== undefined && time.hours.trim() !== '' && !isValidHoursInput(time.hours) && 'border-destructive text-destructive')}
       />
     );
     if (!time) {
@@ -1178,7 +1199,7 @@ export default function DailyLogPage() {
             {workItems.length > 1 && (
               <div className="flex gap-1.5 overflow-x-auto pb-1">
                 {workItems.map((wi, index) => {
-                  const filled = itemStatuses[index].totalHours > 0;
+                  const filled = workItemWorkersComplete(wi);
                   return (
                     <Button
                       key={wi.id}
@@ -1296,7 +1317,7 @@ export default function DailyLogPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground">工人 Workers</p>
-                {workerRows.length === 0 ? <p className="text-sm text-muted-foreground">No worker hours</p> : workerRows.map(row => <p key={row.id} className="text-sm">{row.workerName} · {row.hours}h</p>)}
+                {workerRows.length === 0 ? <p className="text-sm text-muted-foreground">No worker hours</p> : workerRows.map(row => <p key={row.id} className="text-sm">{getWorkerLaborId(row)} · {row.hours}h</p>)}
               </div>
               <div>
                 <p className="text-xs font-semibold text-muted-foreground">设备 Equipment</p>
