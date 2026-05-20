@@ -129,8 +129,8 @@ export default function EquipmentPage() {
   ];
   const foremanSelectOptions = foremen.map(fm => ({
     value: fm.id,
-    label: fm.name,
-    code: fm.laborId,
+    label: fm.laborId || fm.name,
+    code: fm.laborId ? undefined : fm.name,
     hint: fm.phone,
   }));
   const teamFilterOptions = [
@@ -144,9 +144,15 @@ export default function EquipmentPage() {
   const getAssignedForemanNames = (eqId: string) => getAssignedForemen(eqId)
     .map(a => {
       const fm = personnel.find(p => p.id === a.foremanId);
-      return fm?.laborId || fm?.name;
+      return fm?.laborId || fm?.name || a.foremanId;
     })
     .filter(Boolean) as string[];
+
+  const haveSameIds = (left: string[], right: string[]) => {
+    if (left.length !== right.length) return false;
+    const rightSet = new Set(right);
+    return left.every(id => rightSet.has(id));
+  };
 
   const getEngineerForEquipment = (eqId: string) => {
     const names = getAssignedForemanIds(eqId)
@@ -194,10 +200,14 @@ export default function EquipmentPage() {
     try {
       if (editing) {
         await dbUpdateEquipment(editing.id, { name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
-        await setEquipmentTeams(editing.id, form.assignedForemanIds);
+        if (!haveSameIds(getAssignedForemanIds(editing.id), form.assignedForemanIds)) {
+          await setEquipmentTeams(editing.id, form.assignedForemanIds);
+        }
       } else {
         const newEquipmentId = await dbAddEquipment({ name: form.name, equipmentNo: form.equipmentNo || undefined, model: form.model, status: form.status, location: form.location });
-        await setEquipmentTeams(newEquipmentId, form.assignedForemanIds);
+        if (form.assignedForemanIds.length > 0) {
+          await setEquipmentTeams(newEquipmentId, form.assignedForemanIds);
+        }
       }
       toast.success(messages.saved);
       setDialogOpen(false);
@@ -1240,8 +1250,8 @@ export default function EquipmentPage() {
                             : f.assignedForemanIds.filter(id => id !== fm.id),
                         }))}
                       />
-                      <span>{fm.name}</span>
-                      {fm.laborId && <span className="font-mono text-xs text-muted-foreground">{fm.laborId}</span>}
+                      <span className="font-mono font-medium">{fm.laborId || fm.name}</span>
+                      {fm.laborId && <span className="text-xs text-muted-foreground">{fm.name}</span>}
                     </label>
                   ))}
                   {filteredForemen.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">{messages.noMatch}</p>}
@@ -1499,8 +1509,8 @@ export default function EquipmentPage() {
                             : f.assignedForemanIds.filter(id => id !== fm.id),
                         }))}
                       />
-                      <span>{fm.name}</span>
-                      {fm.laborId && <span className="font-mono text-xs text-muted-foreground">{fm.laborId}</span>}
+                      <span className="font-mono font-medium">{fm.laborId || fm.name}</span>
+                      {fm.laborId && <span className="text-xs text-muted-foreground">{fm.name}</span>}
                     </label>
                   ))}
                   {filteredForemen.length === 0 && <p className="px-2 py-3 text-center text-sm text-muted-foreground">没有匹配班组 No matching team</p>}
